@@ -185,6 +185,8 @@ github.com/stretchr/testify v1.4.0/go.mod h1:j7eGeouHqKxXV5pUuKE4zz7dFj8WfuZ+81P
 github.com/subosito/gotenv v1.2.0/go.mod h1:N0PQaV/YGNqwC0u51sEeR/aUtSLEXKX9iv69rRypqCw=
 github.com/tierklinik-dobersberg/apis v0.0.30 h1:FpioFq5546BvXiggayM9Y0r+xAEEOVWkmugN76IxtdY=
 github.com/tierklinik-dobersberg/apis v0.0.30/go.mod h1:BCMOcJ9ynWMrRdaNb3sBs/xJxGBXPi78zEGrvUUBKXA=
+github.com/tierklinik-dobersberg/apis v0.0.31-0.20240812121615-ab830bf95ebe h1:2rVZQlNVRPdld38h2SWfTh6hmZjUWRU3oBDnbtZRBkA=
+github.com/tierklinik-dobersberg/apis v0.0.31-0.20240812121615-ab830bf95ebe/go.mod h1:BCMOcJ9ynWMrRdaNb3sBs/xJxGBXPi78zEGrvUUBKXA=
 github.com/tierklinik-dobersberg/go-dbf v0.1.0/go.mod h1:D8nutiFua4yNMPs0c+efws/L2Vl34yspIzOFSNOtxVg=
 github.com/tierklinik-dobersberg/go-vetinf v0.1.5 h1:Jb/mr1JBpnCK/g3uPN2XFT5Sj/Fyn3BTxVzkkp1xda4=
 github.com/tierklinik-dobersberg/go-vetinf v0.1.5/go.mod h1:eGt2HDnpDCGub7UKEK0Zi6FF8863+VuitlpSD2s0BWY=

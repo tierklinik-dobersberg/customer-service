@@ -5,7 +5,7 @@ go 1.22.5
 require (
 	connectrpc.com/connect v1.16.2
 	github.com/hashicorp/go-multierror v1.1.1
-	github.com/tierklinik-dobersberg/apis v0.0.30
+	github.com/tierklinik-dobersberg/apis v0.0.31-0.20240812121615-ab830bf95ebe
 )
 
 require (
