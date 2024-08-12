@@ -1,16 +1,16 @@
 
 # Build the gobinary
 
-FROM golang:1.22 as gobuild
+FROM golang:1.22 AS gobuild
 
 RUN update-ca-certificates
 
 WORKDIR /go/src/app
 
-RUN --mount=type=cache,target=/go/pkg/mod/ \
-    --mount=type=bind,source=go.sum,target=go.sum \
-    --mount=type=bind,source=go.mod,target=go.mod \
-    go mod download -x
+COPY ./go.mod ./
+COPY ./go.sum ./
+RUN go mod download
+RUN go mod verify
 
 COPY ./ ./
 
