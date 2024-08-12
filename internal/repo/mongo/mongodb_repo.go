@@ -78,6 +78,8 @@ func (r *Repository) LockCustomer(ctx context.Context, id string) (func(), error
 		if mongo.IsDuplicateKeyError(err) {
 			return func() {}, repo.ErrCustomerLocked
 		}
+
+		return func() {}, fmt.Errorf("failed to create customer lock: %w", err)
 	}
 
 	return func() {
