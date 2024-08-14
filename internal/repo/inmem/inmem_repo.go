@@ -173,3 +173,21 @@ func (r *Repository) cloneCustomerStates(id string) []*customerv1.ImportState {
 
 	return states
 }
+
+func (r *Repository) ListCustomers(_ context.Context) ([]*customerv1.CustomerResponse, error) {
+	r.l.RLock()
+	defer r.l.RUnlock()
+
+	results := make([]*customerv1.CustomerResponse, 0, len(r.customers))
+
+	for id, c := range r.customers {
+		results = append(results, &customerv1.CustomerResponse{
+			Customer: repo.Clone(c),
+			States:   r.cloneCustomerStates(id),
+		})
+	}
+
+	return results, nil
+}
+
+var _ repo.Backend = (*Repository)(nil)

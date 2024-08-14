@@ -96,7 +96,6 @@ func (mng *Dispatcher) Send(req *customerv1.ImportSessionRequest) <-chan *custom
 
 func (mng *Dispatcher) sendLoop(ctx context.Context) {
 	defer mng.wg.Done()
-	defer slog.Info("send loop finished")
 
 	for {
 		select {
@@ -130,7 +129,6 @@ func (mng *Dispatcher) sendLoop(ctx context.Context) {
 
 func (mng *Dispatcher) receiveLoop(ctx context.Context) {
 	defer mng.wg.Done()
-	defer slog.Info("receive loop finished")
 
 	for {
 		if ctx.Err() != nil {

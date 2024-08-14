@@ -14,8 +14,9 @@ import (
 )
 
 var (
-	encoding        string
-	customerService string
+	encoding           string
+	customerService    string
+	defaultPhonePrefix string
 )
 
 func main() {
@@ -34,6 +35,7 @@ func getRootCommand() *cobra.Command {
 	f := cmd.Flags()
 	{
 		f.StringVar(&encoding, "encoding", "IBM852", "The encoding of the VetInf database")
+		f.StringVar(&defaultPhonePrefix, "phone-prefix", "", "The default phone region code")
 		f.StringVar(&customerService, "server", "https://customers.dobersberg.vet", "The address of the customer service")
 	}
 
@@ -43,7 +45,7 @@ func getRootCommand() *cobra.Command {
 }
 
 func execute(cmd *cobra.Command, args []string) {
-	exporter, err := NewExporter(args[0], encoding, "AT")
+	exporter, err := NewExporter(args[0], encoding, "AT", defaultPhonePrefix)
 	if err != nil {
 		logrus.Fatalf("failed to create vetinf exporter: %s", err)
 	}

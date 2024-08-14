@@ -28,6 +28,11 @@ func (svc *CustomerService) SearchCustomer(ctx context.Context, msg *connect.Req
 		customers []*customerv1.CustomerResponse
 	)
 
+	// if no queries are given we're searching for all customers using an empty query
+	if len(msg.Msg.Queries) == 0 {
+		msg.Msg.Queries = append(msg.Msg.Queries, &customerv1.CustomerQuery{})
+	}
+
 	for _, query := range msg.Msg.Queries {
 		results, err := svc.repo.SearchQuery(ctx, query)
 		if err != nil {

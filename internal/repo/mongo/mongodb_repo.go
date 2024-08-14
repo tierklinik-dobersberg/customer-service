@@ -47,8 +47,8 @@ func New(ctx context.Context, uri, dbName string) (*Repository, error) {
 	return repo, nil
 }
 
-func (repo *Repository) StoreCustomer(ctx context.Context, customer *customerv1.Customer, states []*customerv1.ImportState) error {
-	document, err := repo.customerToBSON(&customerv1.CustomerResponse{
+func (r *Repository) StoreCustomer(ctx context.Context, customer *customerv1.Customer, states []*customerv1.ImportState) error {
+	document, err := r.customerToBSON(&customerv1.CustomerResponse{
 		Customer: customer,
 		States:   states,
 	})
@@ -57,13 +57,29 @@ func (repo *Repository) StoreCustomer(ctx context.Context, customer *customerv1.
 		return fmt.Errorf("failed to prepare BSON document: %w", err)
 	}
 
-	res, err := repo.customers.InsertOne(ctx, document)
-	if err != nil {
-		return fmt.Errorf("failed to insert customer: %w", err)
-	}
+	if customer.Id != "" {
+		oid, err := primitive.ObjectIDFromHex(customer.Id)
+		if err != nil {
+			return fmt.Errorf("invalid customer id %q: %w", customer.Id, err)
+		}
 
-	// make sure the new customer ID is set on the protobuf message
-	customer.Id = res.InsertedID.(primitive.ObjectID).Hex()
+		res, err := r.customers.ReplaceOne(ctx, bson.M{"_id": oid}, document)
+		if err != nil {
+			return fmt.Errorf("failed to replace customer %q: %w", customer.Id, err)
+		}
+
+		if res.MatchedCount == 0 {
+			return fmt.Errorf("failed to replace customer %q: %w", customer.Id, repo.ErrCustomerNotFound)
+		}
+
+	} else {
+		res, err := r.customers.InsertOne(ctx, document)
+		if err != nil {
+			return fmt.Errorf("failed to insert customer: %w", err)
+		}
+
+		customer.Id = res.InsertedID.(primitive.ObjectID).Hex()
+	}
 
 	return nil
 }
@@ -94,6 +110,10 @@ func (r *Repository) LockCustomer(ctx context.Context, id string) (func(), error
 			})
 		}
 	}, nil
+}
+
+func (r *Repository) ListCustomers(ctx context.Context) ([]*customerv1.CustomerResponse, error) {
+	return r.searchCustomers(ctx, bson.M{})
 }
 
 func (r *Repository) LookupCustomerById(ctx context.Context, id string) (*customerv1.Customer, []*customerv1.ImportState, error) {
@@ -130,6 +150,8 @@ func (r *Repository) LookupCustomerByRef(ctx context.Context, importer, ref stri
 		},
 	}
 
+	slog.DebugContext(ctx, "searching customer by internal reference", slog.Any("filter", filter))
+
 	res := r.customers.FindOne(ctx, filter)
 	if res.Err() != nil {
 		return nil, nil, res.Err()
@@ -149,33 +171,35 @@ func (r *Repository) LookupCustomerByRef(ctx context.Context, importer, ref stri
 }
 
 func (r *Repository) LookupCustomerByName(ctx context.Context, name string) ([]*customerv1.CustomerResponse, error) {
+	slog.InfoContext(ctx, "searching customers by name", slog.Any("name", name))
+
 	return r.searchCustomers(ctx, bson.M{
-		"customer.lastName": bson.M{
-			"$text": bson.M{
-				"$search": name,
-			},
+		"$text": bson.M{
+			"$search": name,
 		},
 	})
 }
 
 func (r *Repository) LookupCustomerByMail(ctx context.Context, mail string) ([]*customerv1.CustomerResponse, error) {
+	slog.InfoContext(ctx, "searching customers by mail", slog.Any("mail", mail))
+
 	return r.searchCustomers(ctx, bson.M{
-		"customer.emailAddresses": bson.M{
-			"$elemMatch": mail,
-		},
+		"customer.emailAddresses": mail,
 	})
 }
 
 func (r *Repository) LookupCustomerByPhone(ctx context.Context, phone string) ([]*customerv1.CustomerResponse, error) {
+	slog.InfoContext(ctx, "searching customers by phone number", slog.Any("phone", phone))
+
 	return r.searchCustomers(ctx, bson.M{
-		"customer.phoneNumbers": bson.M{
-			"$elemMatch": phone,
-		},
+		"customer.phoneNumbers": phone,
 	})
 }
 
-func (r *Repository) searchCustomers(ctx context.Context, filter bson.M) ([]*customerv1.CustomerResponse, error) {
-	res, err := r.customers.Find(ctx, filter)
+func (r *Repository) searchCustomers(ctx context.Context, filter bson.M, opts ...*options.FindOptions) ([]*customerv1.CustomerResponse, error) {
+	slog.DebugContext(ctx, "searching customers", slog.Any("filter", filter))
+
+	res, err := r.customers.Find(ctx, filter, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to perform find operation: %w", err)
 	}
@@ -189,19 +213,25 @@ func (r *Repository) searchCustomers(ctx context.Context, filter bson.M) ([]*cus
 		var m bson.M
 		if err := res.Decode(&m); err != nil {
 			merr.Errors = append(merr.Errors, fmt.Errorf("failed to decode record: %w", err))
+
 			continue
 		}
 
 		customer, err := r.bsonToCustomer(m)
 		if err != nil {
 			merr.Errors = append(merr.Errors, fmt.Errorf("failed to convert record from BSON: %w", err))
+
 			continue
 		}
 
 		results = append(results, customer)
 	}
 
-	return results, nil
+	if res.Err() != nil {
+		merr.Errors = append(merr.Errors, fmt.Errorf("mongodb cursor error: %w", res.Err()))
+	}
+
+	return results, merr.ErrorOrNil()
 
 }
 
@@ -269,8 +299,12 @@ func (repo *Repository) bsonToCustomer(document bson.M) (*customerv1.CustomerRes
 		return nil, fmt.Errorf("failed to marshal BSON as JSON: %w", err)
 	}
 
+	unmarshaler := protojson.UnmarshalOptions{
+		DiscardUnknown: true,
+	}
+
 	var customer = new(customerv1.CustomerResponse)
-	if err := protojson.Unmarshal(json, customer); err != nil {
+	if err := unmarshaler.Unmarshal(json, customer); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal JSON to protobuf message: %w", err)
 	}
 

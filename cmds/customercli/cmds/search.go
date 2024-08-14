@@ -1,11 +1,11 @@
 package cmds
 
 import (
-	"bytes"
 	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 
 	"github.com/bufbuild/connect-go"
 	"github.com/sirupsen/logrus"
@@ -13,10 +13,7 @@ import (
 	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
 	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1/customerv1connect"
 	"github.com/tierklinik-dobersberg/apis/pkg/cli"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/bsonrw"
 	"golang.org/x/net/http2"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func getClient(root *cli.Root) customerv1connect.CustomerServiceClient {
@@ -25,10 +22,11 @@ func getClient(root *cli.Root) customerv1connect.CustomerServiceClient {
 
 func GetSearchCommand(root *cli.Root) *cobra.Command {
 	var (
-		names  []string
-		phones []string
-		mails  []string
-		ids    []string
+		names   []string
+		phones  []string
+		mails   []string
+		ids     []string
+		analyze bool
 	)
 
 	cmd := &cobra.Command{
@@ -77,46 +75,11 @@ func GetSearchCommand(root *cli.Root) *cobra.Command {
 				logrus.Fatalf(err.Error())
 			}
 
-			opts := protojson.MarshalOptions{
-				Multiline: true,
-				Indent:    "  ",
+			if !analyze {
+				root.Print(res.Msg)
+			} else {
+				analyzeCustomers(res.Msg.Results)
 			}
-
-			blob, err := opts.Marshal(res.Msg.Results[0])
-			if err != nil {
-				logrus.Fatal(err.Error())
-			}
-
-			vr, err := bsonrw.NewExtJSONValueReader(bytes.NewReader(blob), true)
-			if err != nil {
-				panic(err)
-			}
-			dec, err := bson.NewDecoder(vr)
-			if err != nil {
-				panic(err)
-			}
-			dec.DefaultDocumentM()
-
-			var m bson.M
-			if err := dec.Decode(&m); err != nil {
-				logrus.Fatal(err.Error())
-			}
-
-			fmt.Printf("%#v\n", m)
-
-			blob2, err := bson.MarshalExtJSON(m, true, false)
-			if err != nil {
-				logrus.Fatal(err.Error())
-			}
-
-			var c = new(customerv1.CustomerResponse)
-
-			if err := protojson.Unmarshal(blob2, c); err != nil {
-				logrus.Fatal(err.Error())
-			}
-
-			root.Print(c)
-			//root.Print(res.Msg)
 		},
 	}
 
@@ -126,6 +89,7 @@ func GetSearchCommand(root *cli.Root) *cobra.Command {
 		f.StringSliceVar(&phones, "phone", nil, "")
 		f.StringSliceVar(&mails, "mail", nil, "")
 		f.StringSliceVar(&ids, "id", nil, "")
+		f.BoolVar(&analyze, "analyze", false, "Analyze customers")
 	}
 
 	return cmd
@@ -143,5 +107,39 @@ func newInsecureClient() *http.Client {
 			},
 			// Don't forget timeouts!
 		},
+	}
+}
+
+func analyzeCustomers(list []*customerv1.CustomerResponse) {
+	var (
+		countByPostalCode     = make(map[string]int)
+		cityNamesByPostalCode = make(map[string][]string)
+	)
+
+	for _, c := range list {
+		for _, addr := range c.Customer.Addresses {
+			countByPostalCode[addr.PostalCode]++
+
+			found := false
+			for _, cityName := range cityNamesByPostalCode[addr.PostalCode] {
+				if cityName == addr.City {
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				cityNamesByPostalCode[addr.PostalCode] = append(cityNamesByPostalCode[addr.PostalCode], addr.City)
+			}
+		}
+	}
+
+	fmt.Printf("Total Customers: %d\n", len(list))
+	fmt.Println("Postal-Codes:")
+
+	for code, count := range countByPostalCode {
+		fmt.Printf("\t%s: %d (", code, count)
+		fmt.Print(strings.Join(cityNamesByPostalCode[code], ", "))
+		fmt.Print(")\n")
 	}
 }

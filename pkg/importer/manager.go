@@ -3,9 +3,9 @@ package importer
 import (
 	"context"
 	"fmt"
-	"log/slog"
 
 	"github.com/hashicorp/go-multierror"
+	"github.com/sirupsen/logrus"
 	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
 )
 
@@ -24,8 +24,6 @@ func NewManager(ctx context.Context, importer string, stream ImportStream) (*Man
 
 	mng.dispatcher.Start()
 
-	slog.Info("sending request: start_session for importer", "identifier", importer)
-
 	res := mng.dispatcher.Send(&customerv1.ImportSessionRequest{
 		Message: &customerv1.ImportSessionRequest_StartSession{
 			StartSession: &customerv1.StartSessionRequest{
@@ -38,8 +36,6 @@ func NewManager(ctx context.Context, importer string, stream ImportStream) (*Man
 		return nil, fmt.Errorf("stream already closed")
 	}
 
-	slog.Info("waiting for response")
-
 	select {
 	case msg := <-res:
 		if msg.GetStartSession() == nil {
@@ -50,15 +46,15 @@ func NewManager(ctx context.Context, importer string, stream ImportStream) (*Man
 		return nil, ctx.Err()
 	}
 
-	slog.Info("import session created successfully")
-
 	return mng, nil
 }
 
-func (mng *Manager) lookupCustomer(req *customerv1.LookupCustomerRequest) (*customerv1.ImportedCustomer, error) {
+func (mng *Manager) lookupCustomer(req *customerv1.CustomerQuery) (*customerv1.ImportedCustomer, error) {
 	res := <-mng.dispatcher.Send(&customerv1.ImportSessionRequest{
 		Message: &customerv1.ImportSessionRequest_LookupCustomer{
-			LookupCustomer: req,
+			LookupCustomer: &customerv1.LookupCustomerRequest{
+				Query: req,
+			},
 		},
 	})
 
@@ -88,6 +84,25 @@ func (mng *Manager) upsertCustomer(ref string, importedCustomer *customerv1.Impo
 		return fmt.Errorf("failed to prepare customer diff: %w", err)
 	}
 
+	// find all attributes that should be deleted
+	for _, owned := range importedCustomer.State.OwnedAttributes {
+		has, err := CustomerHasValue(customer, owned)
+		if err != nil {
+			return err
+		}
+
+		if !has {
+			upd, err := OwnedToUpdate(owned)
+			if err != nil {
+				return err
+			}
+
+			upd.Operation = customerv1.AttributeUpdateOperation_ATTRIBUTE_UPDATE_OPERATION_DELETE
+
+			diff = append(diff, upd)
+		}
+	}
+
 	// send an upsert request
 	upsertResult := <-mng.dispatcher.Send(&customerv1.ImportSessionRequest{
 		Message: &customerv1.ImportSessionRequest_UpsertCustomer{
@@ -114,20 +129,60 @@ func (mng *Manager) upsertCustomer(ref string, importedCustomer *customerv1.Impo
 
 func (mng *Manager) UpsertCustomerByRef(interalReference string, customer *customerv1.Customer) error {
 	// first, lookup any existing customer
-	importedCustomer, err := mng.lookupCustomer(&customerv1.LookupCustomerRequest{
-		Query: &customerv1.CustomerQuery{
-			Query: &customerv1.CustomerQuery_InternalReference{
-				InternalReference: &customerv1.InternalReferenceQuery{
-					Ref: interalReference,
-				},
-			},
-		},
-	})
+	importedCustomer, err := mng.lookupByRef(interalReference)
 	if err != nil {
 		return fmt.Errorf("failed to lookup existing customer record: %w", err)
 	}
 
+	if importedCustomer.Customer.Id == "" {
+		// try again by using the phone numbers
+		for _, number := range customer.PhoneNumbers {
+			importedCustomer, err = mng.lookupByPhone(number)
+			if err != nil {
+				return fmt.Errorf("failed to lookup existing customer record: %w", err)
+			}
+
+			if importedCustomer.Customer.Id != "" {
+				break
+			}
+		}
+	}
+
+	if importedCustomer.Customer.Id != "" {
+		customer.Id = importedCustomer.Customer.Id
+
+		logrus.Infof("customer %s [ref=%s] already imported, updating", importedCustomer.Customer.Id, importedCustomer.State.InternalReference)
+	} else {
+		logrus.Infof("customer %s [ref=%s] not yet seen, creating", customer.LastName, interalReference)
+	}
+
 	return mng.upsertCustomer(interalReference, importedCustomer, customer)
+}
+
+func (mng *Manager) lookupByRef(internalReference string) (*customerv1.ImportedCustomer, error) {
+	return mng.lookupCustomer(&customerv1.CustomerQuery{
+		Query: &customerv1.CustomerQuery_InternalReference{
+			InternalReference: &customerv1.InternalReferenceQuery{
+				Ref: internalReference,
+			},
+		},
+	})
+}
+
+func (mng *Manager) lookupByPhone(phone string) (*customerv1.ImportedCustomer, error) {
+	return mng.lookupCustomer(&customerv1.CustomerQuery{
+		Query: &customerv1.CustomerQuery_PhoneNumber{
+			PhoneNumber: phone,
+		},
+	})
+}
+
+func (mng *Manager) lookupByMail(mail string) (*customerv1.ImportedCustomer, error) {
+	return mng.lookupCustomer(&customerv1.CustomerQuery{
+		Query: &customerv1.CustomerQuery_EmailAddress{
+			EmailAddress: mail,
+		},
+	})
 }
 
 func (mng *Manager) Stop() error {

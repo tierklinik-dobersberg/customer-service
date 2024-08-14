@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/nyaruka/phonenumbers"
 	"github.com/sirupsen/logrus"
@@ -23,7 +24,8 @@ type ExportedCustomer struct {
 // Exporter is capable of exporting and extracting
 // data of a VetInf installation.
 type Exporter struct {
-	encoding string
+	encoding   string
+	regionCode string
 
 	db      *vetinf.Infdat
 	country string
@@ -42,7 +44,7 @@ type VetInf struct {
 }
 
 // NewExporter creates a new exporter for vetinf.
-func NewExporter(path, encoding, country string) (*Exporter, error) {
+func NewExporter(path, encoding, country, phonePrefix string) (*Exporter, error) {
 	stat, err := os.Stat(path)
 	if err != nil {
 		return nil, err
@@ -59,9 +61,10 @@ func NewExporter(path, encoding, country string) (*Exporter, error) {
 	infdat := vetinf.OpenReadonlyFs(path, afero.NewOsFs())
 
 	return &Exporter{
-		db:       infdat,
-		encoding: encoding,
-		country:  country,
+		db:         infdat,
+		encoding:   encoding,
+		country:    country,
+		regionCode: phonePrefix,
 	}, nil
 }
 
@@ -109,7 +112,7 @@ func (e *Exporter) ExportCustomers(ctx context.Context) (<-chan *ExportedCustome
 				})
 			}
 
-			key := fmt.Sprintf("[%s %s]", dbCustomer.LastName, dbCustomer.FirstName)
+			key := e.regionCode
 
 			var hasInvalidPhone bool
 
@@ -146,7 +149,13 @@ func (e *Exporter) ExportCustomers(ctx context.Context) (<-chan *ExportedCustome
 	return customers, total, nil
 }
 
-func addNumber(id string, numbers []string, number, country string, hasError *bool) []string {
+func addNumber(prefix string, numbers []string, number, country string, hasError *bool) []string {
+	number = strings.TrimSpace(number)
+
+	if !strings.HasPrefix(number, "+") && !strings.HasPrefix(number, "0") && prefix != "" {
+		number = prefix + number
+	}
+
 	p, err := phonenumbers.Parse(number, country)
 	if err != nil {
 		*hasError = true
@@ -154,7 +163,6 @@ func addNumber(id string, numbers []string, number, country string, hasError *bo
 	}
 
 	return append(numbers, []string{
-		phonenumbers.Format(p, phonenumbers.NATIONAL),
 		phonenumbers.Format(p, phonenumbers.INTERNATIONAL),
 	}...)
 }

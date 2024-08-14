@@ -116,6 +116,11 @@ func (session *ImportSession) handleCustomerLookup(ctx context.Context, correlat
 	session.lookups.Add(1)
 
 	// TODO(ppacher): handle the error gracefully
+
+	if v := msg.LookupCustomer.Query.GetInternalReference(); v.Importer == "" {
+		v.Importer = session.importer
+	}
+
 	results, _ := session.store.SearchQuery(ctx, msg.LookupCustomer.Query)
 
 	res := &customerv1.ImportSessionResponse_LookupCustomer{

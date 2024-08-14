@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"os"
 
@@ -48,6 +49,8 @@ func main() {
 		log.NewLoggingInterceptor(),
 		validator.NewInterceptor(protoValidator),
 	}
+
+	slog.SetLogLoggerLevel(slog.LevelDebug)
 
 	if os.Getenv("DEBUG") == "" {
 		interceptors = append(interceptors, authInterceptor)

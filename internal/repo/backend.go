@@ -19,6 +19,11 @@ type Backend interface {
 
 	// LockCustomer locks a customer record.
 	LockCustomer(ctx context.Context, id string) (func(), error)
+
+	// Lookup methds
+
+	ListCustomers(ctx context.Context) ([]*customerv1.CustomerResponse, error)
+
 	LookupCustomerById(ctx context.Context, id string) (*customerv1.Customer, []*customerv1.ImportState, error)
 	LookupCustomerByRef(ctx context.Context, importer, ref string) (*customerv1.Customer, []*customerv1.ImportState, error)
 
@@ -45,6 +50,10 @@ func New(backend Backend) Repo {
 
 func (r *repo) SearchQuery(ctx context.Context, query *customerv1.CustomerQuery) ([]*customerv1.CustomerResponse, error) {
 	var customers []*customerv1.CustomerResponse
+
+	if query == nil || query.Query == nil {
+		return r.Backend.ListCustomers(ctx)
+	}
 
 	switch v := query.Query.(type) {
 	case *customerv1.CustomerQuery_Id:

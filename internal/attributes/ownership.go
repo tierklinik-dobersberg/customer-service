@@ -5,8 +5,7 @@ import (
 
 	"github.com/nyaruka/phonenumbers"
 	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/structpb"
+	"github.com/tierklinik-dobersberg/customer-service/pkg/importer"
 )
 
 type Manager struct {
@@ -51,7 +50,7 @@ func NewManager(ref, importer string, customer *customerv1.Customer, states []*c
 }
 
 func (am *Manager) ApplyUpdate(update *customerv1.AttributeUpdate) error {
-	owned := AttrUpdateToOwned(update)
+	owned := importer.AttrUpdateToOwned(update)
 
 	if am.setIgnore {
 		owned.Ignore = true
@@ -77,7 +76,7 @@ func (am *Manager) ApplyUpdate(update *customerv1.AttributeUpdate) error {
 	switch update.Operation {
 	case customerv1.AttributeUpdateOperation_ATTRIBUTE_UPDATE_OPERATION_ADD:
 		var added bool
-		am.currentState.OwnedAttributes, added = addToSet(am.currentState.OwnedAttributes, owned, CompareOwnedAttributes)
+		am.currentState.OwnedAttributes, added = addToSet(am.currentState.OwnedAttributes, owned, importer.CompareOwnedAttributes)
 
 		if added {
 			switch update.Kind {
@@ -87,7 +86,7 @@ func (am *Manager) ApplyUpdate(update *customerv1.AttributeUpdate) error {
 					return fmt.Errorf("invalid value for addresses")
 				}
 
-				am.Customer.Addresses, _ = addToSet(am.Customer.Addresses, sv.Address, CompareAddresses)
+				am.Customer.Addresses, _ = addToSet(am.Customer.Addresses, sv.Address, importer.CompareAddresses)
 
 			case customerv1.AttributeKind_ATTRIBUTE_KIND_PHONE_NUMBER:
 				sv, ok := update.Value.(*customerv1.AttributeUpdate_StringValue)
@@ -123,7 +122,7 @@ func (am *Manager) ApplyUpdate(update *customerv1.AttributeUpdate) error {
 
 	case customerv1.AttributeUpdateOperation_ATTRIBUTE_UPDATE_OPERATION_DELETE:
 		var deleted bool
-		am.currentState.OwnedAttributes, deleted = deleteFromSet(am.currentState.OwnedAttributes, owned, CompareOwnedAttributes)
+		am.currentState.OwnedAttributes, deleted = deleteFromSet(am.currentState.OwnedAttributes, owned, importer.CompareOwnedAttributes)
 
 		if deleted && !am.attributeStillOwned(owned) {
 			switch update.Kind {
@@ -133,7 +132,7 @@ func (am *Manager) ApplyUpdate(update *customerv1.AttributeUpdate) error {
 					return fmt.Errorf("invalid value for addresses")
 				}
 
-				am.Customer.Addresses, _ = deleteFromSet(am.Customer.Addresses, sv.Address, CompareAddresses)
+				am.Customer.Addresses, _ = deleteFromSet(am.Customer.Addresses, sv.Address, importer.CompareAddresses)
 
 			case customerv1.AttributeKind_ATTRIBUTE_KIND_PHONE_NUMBER:
 				sv, ok := update.Value.(*customerv1.AttributeUpdate_StringValue)
@@ -165,7 +164,7 @@ func (am *Manager) ApplyUpdate(update *customerv1.AttributeUpdate) error {
 			return nil
 		}
 
-		am.currentState.OwnedAttributes, _ = addToSet(am.currentState.OwnedAttributes, owned, CompareOwnedAttributes)
+		am.currentState.OwnedAttributes, _ = addToSet(am.currentState.OwnedAttributes, owned, importer.CompareOwnedAttributes)
 
 		switch update.Kind {
 		case customerv1.AttributeKind_ATTRIBUTE_KIND_FIRST_NAME:
@@ -195,7 +194,7 @@ func (am *Manager) ApplyUpdate(update *customerv1.AttributeUpdate) error {
 func (am *Manager) isAttributeIngored(owned *customerv1.OwnedAttribute) bool {
 	for _, state := range am.States {
 		for _, attr := range state.OwnedAttributes {
-			if CompareOwnedAttributes(attr, owned) && attr.Ignore && state.Importer != am.Importer {
+			if importer.CompareOwnedAttributes(attr, owned) && attr.Ignore && state.Importer != am.Importer {
 				return true
 			}
 		}
@@ -211,7 +210,7 @@ func (am *Manager) attributeSettable(owned *customerv1.OwnedAttribute) bool {
 
 	for _, state := range am.States {
 		for _, attr := range state.OwnedAttributes {
-			if CompareOwnedAttributes(attr, owned) {
+			if importer.CompareOwnedAttributes(attr, owned) {
 				return state.Importer == am.Importer
 			}
 		}
@@ -223,17 +222,13 @@ func (am *Manager) attributeSettable(owned *customerv1.OwnedAttribute) bool {
 func (am *Manager) attributeStillOwned(owned *customerv1.OwnedAttribute) bool {
 	for _, state := range am.States {
 		for _, attr := range state.OwnedAttributes {
-			if CompareOwnedAttributes(attr, owned) {
+			if importer.CompareOwnedAttributes(attr, owned) {
 				return true
 			}
 		}
 	}
 
 	return false
-}
-
-func CompareOwnedAttributes(a, b *customerv1.OwnedAttribute) bool {
-	return proto.Equal(a, b)
 }
 
 func addToSet[E any, T []E](list T, element E, cmp func(E, E) bool) (T, bool) {
@@ -254,39 +249,4 @@ func deleteFromSet[E any, T []E](list T, element E, cmp func(E, E) bool) (T, boo
 	}
 
 	return list, false
-}
-
-func AttrUpdateToOwned(update *customerv1.AttributeUpdate) *customerv1.OwnedAttribute {
-	owned := &customerv1.OwnedAttribute{
-		Kind: update.Kind,
-	}
-
-	switch v := update.Value.(type) {
-	case *customerv1.AttributeUpdate_Address:
-		spb, err := structpb.NewStruct(AddressToMap(v.Address))
-
-		if err != nil {
-			panic(err)
-		}
-
-		owned.Value = structpb.NewStructValue(spb)
-
-	case *customerv1.AttributeUpdate_StringValue:
-		owned.Value = structpb.NewStringValue(v.StringValue)
-	}
-
-	return owned
-}
-
-func AddressToMap(addr *customerv1.Address) map[string]interface{} {
-	return map[string]interface{}{
-		"postal_code": addr.PostalCode,
-		"city":        addr.City,
-		"street":      addr.Street,
-		"extra":       addr.Extra,
-	}
-}
-
-func CompareAddresses(a, b *customerv1.Address) bool {
-	return proto.Equal(a, b)
 }
