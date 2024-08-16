@@ -152,6 +152,10 @@ func (e *Exporter) ExportCustomers(ctx context.Context) (<-chan *ExportedCustome
 func addNumber(prefix string, numbers []string, number, country string, hasError *bool) []string {
 	number = strings.TrimSpace(number)
 
+	if number == "" {
+		return numbers
+	}
+
 	if !strings.HasPrefix(number, "+") && !strings.HasPrefix(number, "0") && prefix != "" {
 		number = prefix + number
 	}
