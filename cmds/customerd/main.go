@@ -25,6 +25,20 @@ import (
 	"google.golang.org/protobuf/reflect/protoregistry"
 )
 
+type resolver map[string]int
+
+func (r resolver) IsAllowed(importer string, owners []string) bool {
+	p := r[importer]
+
+	for _, o := range owners {
+		if r[o] > p {
+			return false
+		}
+	}
+
+	return true
+}
+
 func main() {
 	ctx := context.Background()
 
@@ -81,9 +95,15 @@ func main() {
 
 	store := repo.New(backend)
 
+	resolver := resolver{
+		"user":    2,
+		"vetinf":  1,
+		"carddav": 0,
+	}
+
 	// create a new CallService and add it to the mux.
-	importService := importservice.NewImportService(store)
-	customerService := customerservice.New(store)
+	importService := importservice.NewImportService(store, resolver)
+	customerService := customerservice.New(store, resolver)
 
 	path, handler := customerv1connect.NewCustomerImportServiceHandler(importService, connect.WithInterceptors(interceptors...))
 	serveMux.Handle(path, handler)

@@ -7,19 +7,21 @@ import (
 	"github.com/bufbuild/connect-go"
 	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
 	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1/customerv1connect"
-	"github.com/tierklinik-dobersberg/customer-service/internal/attributes"
 	"github.com/tierklinik-dobersberg/customer-service/internal/repo"
+	"github.com/tierklinik-dobersberg/customer-service/internal/session"
 )
 
 type CustomerService struct {
 	customerv1connect.UnimplementedCustomerServiceHandler
 
-	repo repo.Repo
+	repo     repo.Repo
+	resolver session.PriorityResolver
 }
 
-func New(repo repo.Repo) *CustomerService {
+func New(repo repo.Repo, resolver session.PriorityResolver) *CustomerService {
 	return &CustomerService{
-		repo: repo,
+		repo:     repo,
+		resolver: resolver,
 	}
 }
 
@@ -48,37 +50,37 @@ func (svc *CustomerService) SearchCustomer(ctx context.Context, msg *connect.Req
 }
 
 func (svc *CustomerService) UpdateCustomer(ctx context.Context, req *connect.Request[customerv1.UpdateCustomerRequest]) (*connect.Response[customerv1.UpdateCustomerResponse], error) {
-	customer, states, err := svc.repo.LookupCustomerById(ctx, req.Msg.Id)
-	if err != nil {
-		if errors.Is(err, repo.ErrCustomerNotFound) {
-			return nil, connect.NewError(connect.CodeNotFound, err)
-		}
+	var (
+		customer *customerv1.Customer
+		states   []*customerv1.ImportState
+		err      error
+	)
 
-		return nil, err
-	}
+	if id := req.Msg.GetCustomer().GetId(); id != "" {
+		customer, states, err = svc.repo.LookupCustomerById(ctx, id)
+		if err != nil {
+			if errors.Is(err, repo.ErrCustomerNotFound) {
+				return nil, connect.NewError(connect.CodeNotFound, err)
+			}
 
-	am := attributes.NewManager("", "user", customer, states, true)
-
-	hasChanges := false
-
-	for _, upd := range req.Msg.Updates {
-		if err := am.ApplyUpdate(upd); err != nil {
-			return nil, connect.NewError(connect.CodeInvalidArgument, err)
-		}
-
-		hasChanges = true
-	}
-
-	if hasChanges {
-		if err := svc.repo.StoreCustomer(ctx, am.Customer, am.States); err != nil {
 			return nil, err
 		}
 	}
 
+	p := session.NewPatcher("user", "ref", svc.resolver, customer, states)
+
+	if err := p.Apply(req.Msg.Customer); err != nil {
+		return nil, err
+	}
+
+	if err := svc.repo.StoreCustomer(ctx, p.Result, p.States); err != nil {
+		return nil, err
+	}
+
 	return connect.NewResponse(&customerv1.UpdateCustomerResponse{
 		Response: &customerv1.CustomerResponse{
-			Customer: am.Customer,
-			States:   am.States,
+			Customer: p.Result,
+			States:   p.States,
 		},
 	}), nil
 }

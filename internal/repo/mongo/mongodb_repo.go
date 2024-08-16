@@ -3,6 +3,7 @@ package mongo
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -124,7 +125,7 @@ func (r *Repository) LookupCustomerById(ctx context.Context, id string) (*custom
 
 	res := r.customers.FindOne(ctx, bson.M{"_id": oid})
 	if res.Err() != nil {
-		return nil, nil, res.Err()
+		return nil, nil, convertErr(res.Err())
 	}
 
 	var m bson.M
@@ -154,7 +155,7 @@ func (r *Repository) LookupCustomerByRef(ctx context.Context, importer, ref stri
 
 	res := r.customers.FindOne(ctx, filter)
 	if res.Err() != nil {
-		return nil, nil, res.Err()
+		return nil, nil, convertErr(res.Err())
 	}
 
 	var m bson.M
@@ -361,3 +362,15 @@ func (repo *Repository) customerToBSON(customer *customerv1.CustomerResponse) (b
 
 // Compile-time check
 var _ repo.Backend = (*Repository)(nil)
+
+func convertErr(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return repo.ErrCustomerNotFound
+	}
+
+	return err
+}

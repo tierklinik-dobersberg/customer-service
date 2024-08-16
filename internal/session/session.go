@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/bufbuild/connect-go"
 	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
-	"github.com/tierklinik-dobersberg/customer-service/internal/attributes"
 	"github.com/tierklinik-dobersberg/customer-service/internal/repo"
 )
 
@@ -20,6 +20,7 @@ type ImportSession struct {
 	store    repo.Repo
 	wg       sync.WaitGroup
 	importer string
+	resolver PriorityResolver
 
 	sendQueue chan *customerv1.ImportSessionResponse
 
@@ -28,8 +29,9 @@ type ImportSession struct {
 	lookups          atomic.Uint64
 }
 
-func NewImportSession(stream *ImportStream, store repo.Repo) *ImportSession {
+func NewImportSession(stream *ImportStream, store repo.Repo, resolver PriorityResolver) *ImportSession {
 	return &ImportSession{
+		resolver:  resolver,
 		stream:    stream,
 		store:     store,
 		sendQueue: make(chan *customerv1.ImportSessionResponse, 100),
@@ -102,7 +104,9 @@ func (session *ImportSession) handleMessage(ctx context.Context, msg *customerv1
 		session.handleCustomerLookup(ctx, msg.CorrelationId, v)
 
 	case *customerv1.ImportSessionRequest_UpsertCustomer:
-		session.handleUpsert(ctx, msg.CorrelationId, v)
+		if err := session.handleUpsert(ctx, msg.CorrelationId, v); err != nil {
+			session.sendError(ctx, msg.CorrelationId, err)
+		}
 
 	default:
 		slog.ErrorContext(ctx, "unsupported request message", slog.Attr{
@@ -112,16 +116,31 @@ func (session *ImportSession) handleMessage(ctx context.Context, msg *customerv1
 	}
 }
 
+func (session *ImportSession) sendError(ctx context.Context, id string, err error) {
+	select {
+	case session.sendQueue <- &customerv1.ImportSessionResponse{
+		CorrelationId: id,
+		Message: &customerv1.ImportSessionResponse_Error{
+			Error: &customerv1.Error{
+				Error: []string{err.Error()},
+			},
+		},
+	}:
+	case <-ctx.Done():
+	}
+}
+
 func (session *ImportSession) handleCustomerLookup(ctx context.Context, correlationId string, msg *customerv1.ImportSessionRequest_LookupCustomer) {
 	session.lookups.Add(1)
 
-	// TODO(ppacher): handle the error gracefully
-
-	if v := msg.LookupCustomer.Query.GetInternalReference(); v.Importer == "" {
+	if v := msg.LookupCustomer.GetQuery().GetInternalReference(); v != nil && v.Importer == "" {
 		v.Importer = session.importer
 	}
 
-	results, _ := session.store.SearchQuery(ctx, msg.LookupCustomer.Query)
+	results, err := session.store.SearchQuery(ctx, msg.LookupCustomer.Query)
+	if err != nil && !errors.Is(err, repo.ErrCustomerNotFound) {
+		slog.ErrorContext(ctx, "failed to search customers", slog.Any("error", err.Error()))
+	}
 
 	res := &customerv1.ImportSessionResponse_LookupCustomer{
 		LookupCustomer: &customerv1.LookupCustomerResponse{
@@ -147,87 +166,54 @@ func (session *ImportSession) handleCustomerLookup(ctx context.Context, correlat
 	}
 }
 
-func (session *ImportSession) handleUpsert(ctx context.Context, correlationId string, msg *customerv1.ImportSessionRequest_UpsertCustomer) {
+func (session *ImportSession) handleUpsert(ctx context.Context, correlationId string, msg *customerv1.ImportSessionRequest_UpsertCustomer) error {
 	var (
 		customer *customerv1.Customer
 		states   []*customerv1.ImportState
 		err      error
 	)
 
-	if msg.UpsertCustomer.GetId() != "" {
-		customer, states, err = session.store.LookupCustomerById(ctx, msg.UpsertCustomer.Id)
-
-		if err == nil {
-			var unlock func()
-
-			unlock, err = session.store.LockCustomer(ctx, customer.Id)
-			defer unlock() // unlock is never nil
+	if msg.UpsertCustomer.InternalReference != "" {
+		customer, states, err = session.store.LookupCustomerByRef(ctx, session.importer, msg.UpsertCustomer.InternalReference)
+		if err != nil && !errors.Is(err, repo.ErrCustomerNotFound) {
+			return err
 		}
+	}
 
-		if err != nil {
-			session.sendQueue <- &customerv1.ImportSessionResponse{
-				CorrelationId: correlationId,
-				Message: &customerv1.ImportSessionResponse_UpsertError{
-					UpsertError: &customerv1.UpsertCustomerError{
-						Errors: []*customerv1.AttributeUpdateError{
-							{
-								Error: err.Error(), // FIXME
-							},
-						},
-					},
-				},
+	// try to find by phone number
+	if customer == nil {
+		for _, phone := range msg.UpsertCustomer.Customer.PhoneNumbers {
+			res, err := session.store.LookupCustomerByPhone(ctx, phone)
+			if err != nil {
+				return err
 			}
+
+			if len(res) == 1 {
+				customer = res[0].Customer
+				states = res[0].States
+			}
+
+			break
 		}
 	}
 
-	am := attributes.NewManager(msg.UpsertCustomer.InternalReference, session.importer, customer, states, false)
-
-	attrErrors := make([]*customerv1.AttributeUpdateError, 0)
-	hasChanges := false
-
-	for _, upd := range msg.UpsertCustomer.Updates {
-		if err := am.ApplyUpdate(upd); err != nil {
-			attrErrors = append(attrErrors, &customerv1.AttributeUpdateError{
-				Kind:      upd.Kind,
-				Operation: upd.Operation,
-				Error:     err.Error(),
-			})
-		} else {
-			session.attributeUpdates.Add(1)
-			hasChanges = true
+	if customer != nil && customer.Id != "" {
+		unlock, err := session.store.LockCustomer(ctx, customer.Id)
+		if err != nil {
+			return err
 		}
+
+		defer unlock()
 	}
 
-	if hasChanges {
-		session.upserts.Add(1)
-		slog.Info("storing customer", "customer", am.Customer.LastName)
-		if err := session.store.StoreCustomer(ctx, am.Customer, am.States); err != nil {
-			attrErrors = append(attrErrors, &customerv1.AttributeUpdateError{
-				Error: err.Error(),
-			})
+	p := NewPatcher(session.importer, msg.UpsertCustomer.InternalReference, session.resolver, customer, states)
 
-			slog.ErrorContext(ctx, "failed to store customer", slog.Attr{
-				Key:   "error",
-				Value: slog.StringValue(err.Error()),
-			})
-		}
+	if err := p.Apply(msg.UpsertCustomer.GetCustomer()); err != nil {
+		return fmt.Errorf("failed to apply updates: %w", err)
 	}
 
-	if len(attrErrors) > 0 {
-		select {
-		case session.sendQueue <- &customerv1.ImportSessionResponse{
-			CorrelationId: correlationId,
-			Message: &customerv1.ImportSessionResponse_UpsertError{
-				UpsertError: &customerv1.UpsertCustomerError{
-					Errors: attrErrors,
-				},
-			},
-		}:
-
-		case <-ctx.Done():
-		}
-
-		return
+	if err := session.store.StoreCustomer(ctx, p.Result, p.States); err != nil {
+		return fmt.Errorf("failed to store customer: %w", err)
 	}
 
 	select {
@@ -235,13 +221,14 @@ func (session *ImportSession) handleUpsert(ctx context.Context, correlationId st
 		CorrelationId: correlationId,
 		Message: &customerv1.ImportSessionResponse_UpsertSuccess{
 			UpsertSuccess: &customerv1.UpsertCustomerSuccess{
-				Id: am.Customer.Id,
+				Id: p.Result.Id,
 			},
 		},
 	}:
-
 	case <-ctx.Done():
 	}
+
+	return nil
 }
 
 func (session *ImportSession) findImporterState(states []*customerv1.ImportState) *customerv1.ImportState {

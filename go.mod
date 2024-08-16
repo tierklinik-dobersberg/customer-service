@@ -4,7 +4,9 @@ go 1.22.5
 
 require (
 	github.com/bufbuild/connect-go v1.10.0
-	github.com/bufbuild/protovalidate-go v0.6.3
+	github.com/bufbuild/protovalidate-go v0.6.4
+	github.com/emersion/go-vcard v0.0.0-20230815062825-8fda7d206ec9
+	github.com/emersion/go-webdav v0.5.0
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/nyaruka/phonenumbers v1.4.0
 	github.com/sethvargo/go-envconfig v1.1.0
@@ -12,10 +14,11 @@ require (
 	github.com/spf13/afero v1.11.0
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.9.0
-	github.com/tierklinik-dobersberg/apis v0.0.31-0.20240812121615-ab830bf95ebe
+	github.com/tierklinik-dobersberg/apis v0.0.31-0.20240816053348-1bad8db0919c
 	github.com/tierklinik-dobersberg/go-vetinf v0.1.5
 	go.mongodb.org/mongo-driver v1.16.1
 	golang.org/x/net v0.28.0
+	golang.org/x/sync v0.8.0
 	google.golang.org/protobuf v1.34.2
 )
 
@@ -46,11 +49,10 @@ require (
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
 	golang.org/x/crypto v0.26.0 // indirect
 	golang.org/x/exp v0.0.0-20240808152545-0cdaa3abc0fa // indirect
-	golang.org/x/sync v0.8.0 // indirect
 	golang.org/x/sys v0.24.0 // indirect
 	golang.org/x/text v0.17.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20240808171019-573a1156607a // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240808171019-573a1156607a // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20240814211410-ddb44dafa142 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240814211410-ddb44dafa142 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

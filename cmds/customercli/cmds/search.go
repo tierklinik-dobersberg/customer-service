@@ -1,24 +1,15 @@
 package cmds
 
 import (
-	"crypto/tls"
 	"fmt"
-	"net"
-	"net/http"
 	"strings"
 
 	"github.com/bufbuild/connect-go"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
-	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1/customerv1connect"
 	"github.com/tierklinik-dobersberg/apis/pkg/cli"
-	"golang.org/x/net/http2"
 )
-
-func getClient(root *cli.Root) customerv1connect.CustomerServiceClient {
-	return customerv1connect.NewCustomerServiceClient(newInsecureClient(), "http://localhost:8090")
-}
 
 func GetSearchCommand(root *cli.Root) *cobra.Command {
 	var (
@@ -32,7 +23,7 @@ func GetSearchCommand(root *cli.Root) *cobra.Command {
 	cmd := &cobra.Command{
 		Use: "search [flags]",
 		Run: func(cmd *cobra.Command, args []string) {
-			cli := getClient(root)
+			cli := root.Customer()
 
 			req := &customerv1.SearchCustomerRequest{}
 
@@ -93,21 +84,6 @@ func GetSearchCommand(root *cli.Root) *cobra.Command {
 	}
 
 	return cmd
-}
-
-func newInsecureClient() *http.Client {
-	return &http.Client{
-		Transport: &http2.Transport{
-			AllowHTTP: true,
-			DialTLS: func(network, addr string, _ *tls.Config) (net.Conn, error) {
-				// If you're also using this client for non-h2c traffic, you may want
-				// to delegate to tls.Dial if the network isn't TCP or the addr isn't
-				// in an allowlist.
-				return net.Dial(network, addr)
-			},
-			// Don't forget timeouts!
-		},
-	}
 }
 
 func analyzeCustomers(list []*customerv1.CustomerResponse) {

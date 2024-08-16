@@ -1,2 +1,5 @@
 go.work
 go.work.sum
+.github
+cmds/
+!cmds/customerd
