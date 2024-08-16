@@ -97,12 +97,6 @@ func (svc *CustomerService) SearchCustomerStream(ctx context.Context, stream *co
 				}
 			}
 
-			if ctx.Err() != nil {
-				slog.InfoContext(ctx, "dropping response, context cancelled")
-
-				return
-			}
-
 			if err := stream.Send(&customerv1.SearchCustomerResponse{
 				Results:       response,
 				CorrelationId: msg.CorrelationId,
@@ -112,11 +106,9 @@ func (svc *CustomerService) SearchCustomerStream(ctx context.Context, stream *co
 		}()
 	}
 
-	if lastErr == nil {
-		slog.InfoContext(ctx, "waiting for go-routines to finish", slog.Any("count", pending.Load()))
-		wg.Wait()
-		slog.InfoContext(ctx, "go-routines finsihed, response done")
-	}
+	slog.InfoContext(ctx, "waiting for go-routines to finish", slog.Any("count", pending.Load()))
+	wg.Wait()
+	slog.InfoContext(ctx, "go-routines finsihed, response done")
 
 	return lastErr
 }
