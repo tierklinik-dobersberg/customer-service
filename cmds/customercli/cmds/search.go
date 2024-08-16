@@ -1,15 +1,110 @@
 package cmds
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/bufbuild/connect-go"
+	"github.com/chzyer/readline"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
 	"github.com/tierklinik-dobersberg/apis/pkg/cli"
 )
+
+func GetSearchStreamCommand(root *cli.Root) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:  "stream",
+		Args: cobra.ExactArgs(0),
+		Run: func(cmd *cobra.Command, args []string) {
+			cli := root.Customer()
+
+			ctx, cancel := context.WithCancel(root.Context())
+			defer cancel()
+
+			stream := cli.SearchCustomerStream(ctx)
+
+			rl, err := readline.New("> ")
+			if err != nil {
+				panic(err)
+			}
+			defer rl.Close()
+
+			go func() {
+				defer cancel()
+
+				for {
+					msg, err := stream.Receive()
+					if err != nil {
+						fmt.Fprintf(rl.Stderr(), "failed to receive from stream: %s\n", err)
+						return
+					}
+
+					root.Print(msg.Results)
+				}
+			}()
+
+		L:
+			for {
+				line, err := rl.Readline()
+				if err != nil { // io.EOF
+					break
+				}
+
+				parts := strings.SplitN(line, ":", 2)
+				if len(parts) == 1 {
+					fmt.Fprintf(rl.Stderr(), "invalid search input\n")
+				}
+
+				req := &customerv1.SearchCustomerRequest{}
+
+				switch parts[0] {
+				case "name":
+					req.Queries = []*customerv1.CustomerQuery{
+						&customerv1.CustomerQuery{
+							Query: &customerv1.CustomerQuery_Name{
+								Name: &customerv1.NameQuery{
+									LastName: parts[1],
+								},
+							},
+						},
+					}
+				case "phone":
+					req.Queries = []*customerv1.CustomerQuery{
+						&customerv1.CustomerQuery{
+							Query: &customerv1.CustomerQuery_PhoneNumber{
+								PhoneNumber: parts[1],
+							},
+						},
+					}
+				case "mail":
+					req.Queries = []*customerv1.CustomerQuery{
+						&customerv1.CustomerQuery{
+							Query: &customerv1.CustomerQuery_EmailAddress{
+								EmailAddress: parts[1],
+							},
+						},
+					}
+
+				case "exist":
+					break L
+				default:
+					fmt.Fprintf(rl.Stderr(), "invalid search input\n")
+					continue L
+				}
+
+				if err := stream.Send(req); err != nil {
+					fmt.Fprintf(rl.Stderr(), "failed to send request: %s\n", err.Error())
+				}
+
+			}
+
+		},
+	}
+
+	return cmd
+}
 
 func GetSearchCommand(root *cli.Root) *cobra.Command {
 	var (
@@ -73,6 +168,8 @@ func GetSearchCommand(root *cli.Root) *cobra.Command {
 			}
 		},
 	}
+
+	cmd.AddCommand(GetSearchStreamCommand(root))
 
 	f := cmd.Flags()
 	{

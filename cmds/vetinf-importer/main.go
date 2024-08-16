@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"net/http"
 
+	connect "github.com/bufbuild/connect-go"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1/customerv1connect"
 	"github.com/tierklinik-dobersberg/apis/pkg/cli"
 	"github.com/tierklinik-dobersberg/customer-service/pkg/importer"
 )
@@ -46,7 +49,18 @@ func execute(root *cli.Root, args []string) {
 		logrus.Fatalf("failed to create vetinf exporter: %s", err)
 	}
 
-	cli := root.CustomerImport()
+	logrus.Infof("creating http client")
+	tr := &http.Transport{
+		ForceAttemptHTTP2: true,
+	}
+
+	httpCli := &http.Client{
+		Transport: tr,
+	}
+
+	cli := customerv1connect.NewCustomerImportServiceClient(httpCli, root.Config().BaseURLS.CustomerService, connect.WithInterceptors(
+		NewAuthInterceptor(root),
+	))
 
 	stream, _, err := exporter.ExportCustomers(context.Background())
 	if err != nil {

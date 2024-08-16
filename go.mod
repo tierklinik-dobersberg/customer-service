@@ -14,7 +14,7 @@ require (
 	github.com/spf13/afero v1.11.0
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.9.0
-	github.com/tierklinik-dobersberg/apis v0.0.31-0.20240816053348-1bad8db0919c
+	github.com/tierklinik-dobersberg/apis v0.0.31-0.20240816093758-41642b168328
 	github.com/tierklinik-dobersberg/go-vetinf v0.1.5
 	go.mongodb.org/mongo-driver v1.16.1
 	golang.org/x/net v0.28.0
@@ -26,6 +26,7 @@ require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.34.2-20240717164558-a6c49f84cc0f.2 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/axgle/mahonia v0.0.0-20180208002826-3358181d7394 // indirect
+	github.com/chzyer/readline v1.5.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
