@@ -39,6 +39,8 @@ func (r resolver) IsAllowed(importer string, owners []string) bool {
 	return true
 }
 
+var serverContextKey = struct{ S string }{S: "serverContextKey"}
+
 func main() {
 	ctx := context.Background()
 
@@ -57,7 +59,21 @@ func main() {
 	authInterceptor := auth.NewAuthAnnotationInterceptor(
 		protoregistry.GlobalFiles,
 		auth.NewIDMRoleResolver(roleServiceClient),
-		auth.RemoteHeaderExtractor)
+		func(ctx context.Context, req connect.AnyRequest) (auth.RemoteUser, error) {
+			serverKey, _ := ctx.Value(serverContextKey).(string)
+
+			if serverKey == "admin" {
+				return auth.RemoteUser{
+					ID:          "service-account",
+					DisplayName: req.Peer().Addr,
+					RoleIDs:     []string{"idm_superuser"}, // FIXME(ppacher): use a dedicated manager role for this
+					Admin:       true,
+				}, nil
+			}
+
+			return auth.RemoteHeaderExtractor(ctx, req)
+		},
+	)
 
 	interceptors := []connect.Interceptor{
 		log.NewLoggingInterceptor(),
@@ -119,15 +135,28 @@ func main() {
 		})
 	}
 
+	wrapWithKey := func(key string, next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r = r.WithContext(context.WithValue(r.Context(), serverContextKey, key))
+
+			next.ServeHTTP(w, r)
+		})
+	}
+
 	// Create the server
-	srv, err := server.CreateWithOptions(cfg.ListenAddress, loggingHandler(serveMux), server.WithCORS(corsConfig))
+	srv, err := server.CreateWithOptions(cfg.ListenAddress, wrapWithKey("public", loggingHandler(serveMux)), server.WithCORS(corsConfig))
+	if err != nil {
+		logrus.Fatalf("failed to setup server: %s", err)
+	}
+
+	adminServer, err := server.CreateWithOptions(cfg.AdminListenAddress, wrapWithKey("admin", loggingHandler(serveMux)), server.WithCORS(corsConfig))
 	if err != nil {
 		logrus.Fatalf("failed to setup server: %s", err)
 	}
 
 	logrus.Infof("HTTP/2 server (h2c) prepared successfully, startin to listen ...")
 
-	if err := server.Serve(ctx, srv); err != nil {
+	if err := server.Serve(ctx, srv, adminServer); err != nil {
 		logrus.Fatalf("failed to serve: %s", err)
 	}
 }
