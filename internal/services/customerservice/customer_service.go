@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 
 	"github.com/bufbuild/connect-go"
 	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
@@ -35,6 +36,7 @@ func (svc *CustomerService) SearchCustomerStream(ctx context.Context, stream *co
 	var (
 		wg      sync.WaitGroup
 		lastErr error
+		pending atomic.Int64
 	)
 
 	for {
@@ -49,9 +51,12 @@ func (svc *CustomerService) SearchCustomerStream(ctx context.Context, stream *co
 			break
 		}
 
+		pending.Add(1)
 		wg.Add(1)
+
 		go func() {
 			defer wg.Done()
+			defer pending.Add(-1)
 
 			queries := msg.Queries
 			// if no queries are given we're searching for all customers using an empty query
@@ -78,10 +83,10 @@ func (svc *CustomerService) SearchCustomerStream(ctx context.Context, stream *co
 					if err := stream.Send(&customerv1.SearchCustomerResponse{
 						CorrelationId: msg.CorrelationId,
 					}); err != nil {
-						slog.ErrorContext(ctx, "failed to send stream message", slog.Any("error", err.Error()))
+						slog.ErrorContext(ctx, "failed to send empty stream message", slog.Any("error", err.Error()))
 					}
 
-					continue
+					return
 				}
 
 				for _, c := range res {
@@ -107,7 +112,7 @@ func (svc *CustomerService) SearchCustomerStream(ctx context.Context, stream *co
 		}()
 	}
 
-	slog.InfoContext(ctx, "waiting for go-routines to finish")
+	slog.InfoContext(ctx, "waiting for %d go-routines to finish", pending.Load())
 	wg.Wait()
 
 	return lastErr
