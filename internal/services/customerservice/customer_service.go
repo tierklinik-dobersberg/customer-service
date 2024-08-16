@@ -66,6 +66,7 @@ func (svc *CustomerService) SearchCustomerStream(ctx context.Context, stream *co
 
 			for _, query := range queries {
 				if ctx.Err() != nil {
+					slog.InfoContext(ctx, "aborting queries, context cancelled")
 					return
 				}
 
@@ -92,6 +93,8 @@ func (svc *CustomerService) SearchCustomerStream(ctx context.Context, stream *co
 			}
 
 			if ctx.Err() != nil {
+				slog.InfoContext(ctx, "dropping response, context cancelled")
+
 				return
 			}
 
@@ -104,6 +107,7 @@ func (svc *CustomerService) SearchCustomerStream(ctx context.Context, stream *co
 		}()
 	}
 
+	slog.InfoContext(ctx, "waiting for go-routines to finish")
 	wg.Wait()
 
 	return lastErr
