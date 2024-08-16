@@ -112,7 +112,7 @@ func (svc *CustomerService) SearchCustomerStream(ctx context.Context, stream *co
 		}()
 	}
 
-	slog.InfoContext(ctx, "waiting for %d go-routines to finish", pending.Load())
+	slog.InfoContext(ctx, "waiting for go-routines to finish", slog.Any("count", pending.Load()))
 	wg.Wait()
 
 	return lastErr
