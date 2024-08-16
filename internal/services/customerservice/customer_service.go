@@ -72,6 +72,14 @@ func (svc *CustomerService) SearchCustomerStream(ctx context.Context, stream *co
 				res, err := svc.repo.SearchQuery(ctx, query)
 				if err != nil {
 					slog.ErrorContext(ctx, "failed to search customers", slog.Any("error", err.Error()))
+
+					// send an empty response
+					if err := stream.Send(&customerv1.SearchCustomerResponse{
+						CorrelationId: msg.CorrelationId,
+					}); err != nil {
+						slog.ErrorContext(ctx, "failed to send stream message", slog.Any("error", err.Error()))
+					}
+
 					continue
 				}
 
