@@ -37,6 +37,7 @@ func (svc *CustomerService) SearchCustomerStream(ctx context.Context, stream *co
 		wg      sync.WaitGroup
 		lastErr error
 		pending atomic.Int64
+		l       sync.Mutex
 	)
 
 	for {
@@ -45,6 +46,8 @@ func (svc *CustomerService) SearchCustomerStream(ctx context.Context, stream *co
 			if errors.Is(err, io.EOF) {
 				break
 			}
+
+			cancel()
 
 			slog.ErrorContext(ctx, "failed to receive from stream", slog.Any("error", err.Error()))
 			lastErr = err
@@ -79,6 +82,9 @@ func (svc *CustomerService) SearchCustomerStream(ctx context.Context, stream *co
 				if err != nil {
 					slog.ErrorContext(ctx, "failed to search customers", slog.Any("error", err.Error()))
 
+					l.Lock()
+					defer l.Unlock()
+
 					// send an empty response
 					if err := stream.Send(&customerv1.SearchCustomerResponse{
 						CorrelationId: msg.CorrelationId,
@@ -96,6 +102,9 @@ func (svc *CustomerService) SearchCustomerStream(ctx context.Context, stream *co
 					}
 				}
 			}
+
+			l.Lock()
+			defer l.Unlock()
 
 			if err := stream.Send(&customerv1.SearchCustomerResponse{
 				Results:       response,
