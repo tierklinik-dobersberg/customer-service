@@ -127,6 +127,8 @@ func main() {
 	path, handler = customerv1connect.NewCustomerServiceHandler(customerService, connect.WithInterceptors(interceptors...))
 	serveMux.Handle(path, handler)
 
+	serveMux.Handle("/crm/lookup", http.HandlerFunc(customerService.CRMLookupHandler))
+
 	loggingHandler := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			logrus.Infof("received request: %s %s %s%s", r.Proto, r.Method, r.Host, r.URL.String())
