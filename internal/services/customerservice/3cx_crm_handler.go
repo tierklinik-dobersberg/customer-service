@@ -2,6 +2,7 @@ package customerservice
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -10,10 +11,11 @@ import (
 )
 
 type CRMLookupResponse struct {
-	FirstName    string   `json:"firstName"`
-	LastName     string   `json:"lastName"`
-	ID           string   `json:"id"`
-	PhoneNumbers []string `json:"phoneNumbers"`
+	FirstName string `json:"firstName"`
+	LastName  string `json:"lastName"`
+	ID        string `json:"id"`
+
+	PhoneNumbers map[string]string `json:"phoneNumbers"`
 }
 
 // GET /crm/lookup?phone=xyz
@@ -49,11 +51,11 @@ func (svc *CustomerService) CRMLookupHandler(w http.ResponseWriter, req *http.Re
 		ID:           res[0].Customer.Id,
 		FirstName:    res[0].Customer.FirstName,
 		LastName:     res[0].Customer.LastName,
-		PhoneNumbers: make([]string, len(res[0].Customer.PhoneNumbers)),
+		PhoneNumbers: make(map[string]string, len(res[0].Customer.PhoneNumbers)),
 	}
 
 	for idx, p := range res[0].Customer.PhoneNumbers {
-		response.PhoneNumbers[idx] = strings.ReplaceAll(p, " ", "")
+		response.PhoneNumbers[fmt.Sprintf("%d", idx)] = strings.ReplaceAll(p, " ", "")
 	}
 
 	blob, err := json.Marshal(response)

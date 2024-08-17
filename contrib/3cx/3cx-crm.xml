@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Crm xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" Country="AT" Name="TKDv4" Version="4" SupportsEmojis="false" ListPageSize="0">
+  <Number Prefix="AsIs" MaxLength="[MaxLength]" />
+  <Connection MaxConcurrentRequests="16" />
+  <Parameters>
+    <Parameter Name="APIkey" Type="String" Parent="General Configuration" Editor="String" Title="API Key:" />
+  </Parameters>
+  <Authentication Type="Basic">
+    <Value>token:[APIkey]</Value>
+  </Authentication>
+  <Scenarios>
+    <Scenario Id="" Type="REST">
+      <Request SkipIf="" Url="https://customer.dobersberg.vet/crm/lookup?phone=[Number]" MessagePasses="0" RequestEncoding="UrlEncoded" RequestType="Get" ResponseType="Json" />
+      <Rules>
+        <Rule Type="Any">id</Rule>
+      </Rules>
+
+      <Variables>
+        <Variable Name="ContactID" Path="id">
+          <Filter />
+        </Variable>
+        <Variable Name="FirstName" Path="firstName">
+          <Filter />
+        </Variable>
+        <Variable Name="LastName" Path="lastName">
+          <Filter />
+        </Variable>
+        <Variable Name="PhoneBusiness" Path="phoneNumbers.0">
+          <Filter />
+        </Variable>
+        <Variable Name="PhoneBusiness2" Path="phoneNumbers.1">
+          <Filter />
+        </Variable>
+        <Variable Name="PhoneMobile" Path="phoneNumbers.2">
+          <Filter />
+        </Variable>
+        <Variable Name="PhoneMobile2" Path="phoneNumbers.3">
+          <Filter />
+        </Variable>
+        <Variable Name="PhoneOther" Path="phoneNumbers.4">
+          <Filter />
+        </Variable>
+      </Variables>
+
+      <Outputs AllowEmpty="false">
+        <Output Type="ContactID" Passes="0" Value="[ContactID]" />
+        <Output Type="FirstName" Passes="0" Value="[FirstName]" />
+        <Output Type="LastName" Passes="0" Value="[LastName]" />
+        <Output Type="Email" Passes="0" Value="[Email]" />
+        <Output Type="PhoneBusiness" Passes="0" Value="[PhoneBusiness]" />
+        <Output Type="PhoneBusiness2" Passes="0" Value="[PhoneBusiness2]" />
+        <Output Type="PhoneMobile" Passes="0" Value="[PhoneMobile]" />
+        <Output Type="PhoneMobile2" Passes="0" Value="[PhoneMobile2]" />
+        <Output Type="ContactUrl" Passes="0" Value="https://my.dobersberg.vet/customer/view/[ContactID]" />
+      </Outputs>
+    </Scenario>
+
+    <Scenario Id="ReportCall" Type="REST">
+      <Request Url="https://3cx.dobersberg.vet/tkd.pbx3cx.v1.CallService/RecordCall" MessagePasses="0" RequestContentType="application/json" RequestEncoding="Json" RequestType="Post" ResponseType="Json">
+        <PostValues Key="">
+          <Value Key="duration" Passes="1" Type="String">[[[DurationTimespan].get_TotalSeconds()].ToString("F0")]</Value>
+          <Value Key="number" Passes="1" Type="String">[Number]</Value>
+          <Value Key="agent" Passes="1" Type="String">[Agent]</Value>
+          <Value Key="call_type" Passes="1" Type="String">[CallType]</Value>
+          <Value Key="date_time" Passes="1" Type="String">[DateTime]</Value>
+          <Value Key="customer_id" Passes="1" Type="String">[Contact::ContactID]</Value>
+          <Value Key="queue_extension" Passes="1" Type="String">[QueueExtension]</Value>
+        </PostValues>
+      </Request>
+      <Variables />
+      <Outputs AllowEmpty="true" />
+    </Scenario>
+  </Scenarios>
+</Crm>
