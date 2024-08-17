@@ -62,6 +62,8 @@ func (svc *CustomerService) CRMLookupHandler(w http.ResponseWriter, req *http.Re
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write(blob); err != nil {
 		slog.ErrorContext(req.Context(), "failed to write crm lookup response", slog.Any("error", err.Error()))
