@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/nyaruka/phonenumbers"
 )
@@ -48,7 +49,11 @@ func (svc *CustomerService) CRMLookupHandler(w http.ResponseWriter, req *http.Re
 		ID:           res[0].Customer.Id,
 		FirstName:    res[0].Customer.FirstName,
 		LastName:     res[0].Customer.LastName,
-		PhoneNumbers: res[0].Customer.PhoneNumbers,
+		PhoneNumbers: make([]string, len(res[0].Customer.PhoneNumbers)),
+	}
+
+	for idx, p := range res[0].Customer.PhoneNumbers {
+		response.PhoneNumbers[idx] = strings.ReplaceAll(p, " ", "")
 	}
 
 	blob, err := json.Marshal(response)
