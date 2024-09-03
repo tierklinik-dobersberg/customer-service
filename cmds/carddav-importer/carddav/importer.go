@@ -88,6 +88,12 @@ func convertToCustomer(ao *carddav.AddressObject) (*customerv1.Customer, string,
 		cus.LastName = strings.TrimSpace(n.FamilyName)
 	}
 
+	if cus.FirstName != "" && cus.LastName == "" {
+		parts := strings.Split(cus.FirstName, " ")
+		cus.LastName = parts[0]
+		cus.FirstName = strings.Join(parts[1:], " ")
+	}
+
 	if addr := ao.Card.Address(); addr != nil {
 		cus.Addresses = append(cus.Addresses, &customerv1.Address{
 			City:       strings.TrimSpace(addr.Locality),
