@@ -37,6 +37,8 @@ github.com/bufbuild/protovalidate-go v0.6.3 h1:wxQyzW035zM16Binbaz/nWAzS12dRIXhZ
 github.com/bufbuild/protovalidate-go v0.6.3/go.mod h1:J4PtwP9Z2YAGgB0+o+tTWEDtLtXvz/gfhFZD8pbzM/U=
 github.com/bufbuild/protovalidate-go v0.6.4 h1:QtNIz4LGclM3UArQv/R1AKNF7MO8wriT9v7b8Gnmqak=
 github.com/bufbuild/protovalidate-go v0.6.4/go.mod h1:HlkVnkE/zVYZvHIG/a7QZuzqC9bSqHaOOTeRomYF0Q8=
+github.com/bufbuild/protovalidate-go v0.6.5 h1:WucDKXIbK22WjkO8A8J6Yyxxy0jl91Oe9LSMduq3YEE=
+github.com/bufbuild/protovalidate-go v0.6.5/go.mod h1:LHDiGCWSM3GagZEnyEZ1sPtFwi6Ja4tVTi/DCc+iDFI=
 github.com/cespare/xxhash v1.1.0/go.mod h1:XrSqR1VqqWfGrhpAt58auRo0WTKS1nRRg3ghfAqPWnc=
 github.com/chzyer/logex v1.2.1/go.mod h1:JLbx6lG2kDbNRFnfkgvh4eRJRPX1QCoOIWomwysCBrQ=
 github.com/chzyer/readline v1.5.1 h1:upd/6fQk4src78LMRzh5vItIt361/o4uq553V8B5sGI=
@@ -218,6 +220,8 @@ github.com/rogpeppe/go-internal v1.3.0/go.mod h1:M8bDsm7K2OlrFYOpmOWEs/qY81heoFR
 github.com/rogpeppe/go-internal v1.10.0 h1:TMyTOH3F/DB16zRVcYyreMH6GnZZrwQVAoYjRBZyWFQ=
 github.com/rs/cors v1.11.0 h1:0B9GE/r9Bc2UxRMMtymBkHTenPkHDv0CW4Y98GBY+po=
 github.com/rs/cors v1.11.0/go.mod h1:XyqrcTp5zjWr1wsJ8PIRZssZ8b/WMcMf71DJnit4EMU=
+github.com/rs/cors v1.11.1 h1:eU3gRzXLRK57F5rKMGMZURNdIG4EoAmX8k94r9wXWHA=
+github.com/rs/cors v1.11.1/go.mod h1:XyqrcTp5zjWr1wsJ8PIRZssZ8b/WMcMf71DJnit4EMU=
 github.com/russross/blackfriday/v2 v2.0.1/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
 github.com/ryanuber/columnize v0.0.0-20160712163229-9b3edd62028f/go.mod h1:sm1tb6uqfes/u+d4ooFouqFdy9/2g9QGwK3SQygK0Ts=
@@ -276,6 +280,10 @@ github.com/tierklinik-dobersberg/apis v0.0.31-0.20240816053348-1bad8db0919c h1:1
 github.com/tierklinik-dobersberg/apis v0.0.31-0.20240816053348-1bad8db0919c/go.mod h1:btvcOqRgDFHWesLlp9ZWdZXhBBjS/ZiS8ZuPDgnx6r8=
 github.com/tierklinik-dobersberg/apis v0.0.31-0.20240816093758-41642b168328 h1:jgusqpW7a9bPfeQAInADGEIa0/kYiRKoSHDz8CgTbzk=
 github.com/tierklinik-dobersberg/apis v0.0.31-0.20240816093758-41642b168328/go.mod h1:btvcOqRgDFHWesLlp9ZWdZXhBBjS/ZiS8ZuPDgnx6r8=
+github.com/tierklinik-dobersberg/apis v0.0.46-0.20240831072343-e9d433b0041d h1:+lJs/j488Qn1Yjji8iuor79nvop7xATvtYThnH5VoTE=
+github.com/tierklinik-dobersberg/apis v0.0.46-0.20240831072343-e9d433b0041d/go.mod h1:5vHtpoPktL3Oix5/9OE5KhhGDiX5zoaNM/grJLb+3Ys=
+github.com/tierklinik-dobersberg/apis v0.0.46-0.20240831072728-27ee7dc39da8 h1:Bc3OCKb9Yg9uwQQ2SRDBYEQ/txUZQxO64WJJFS1+0As=
+github.com/tierklinik-dobersberg/apis v0.0.46-0.20240831072728-27ee7dc39da8/go.mod h1:5vHtpoPktL3Oix5/9OE5KhhGDiX5zoaNM/grJLb+3Ys=
 github.com/tierklinik-dobersberg/go-dbf v0.1.0 h1:AiJd9Fr2bCCtavP7XCkDVa1FcywEByWe3yJDG40lzTs=
 github.com/tierklinik-dobersberg/go-dbf v0.1.0/go.mod h1:D8nutiFua4yNMPs0c+efws/L2Vl34yspIzOFSNOtxVg=
 github.com/tierklinik-dobersberg/go-vetinf v0.1.5 h1:Jb/mr1JBpnCK/g3uPN2XFT5Sj/Fyn3BTxVzkkp1xda4=
@@ -315,6 +323,8 @@ golang.org/x/exp v0.0.0-20190829153037-c13cbed26979/go.mod h1:86+5VVa7VpoJ4kLfm0
 golang.org/x/exp v0.0.0-20191030013958-a1ab85dbe136/go.mod h1:JXzH8nQsPlswgeRAPE3MuO9GYsAcnJvJ4vnMwN/5qkY=
 golang.org/x/exp v0.0.0-20240808152545-0cdaa3abc0fa h1:ELnwvuAXPNtPk1TJRuGkI9fDTwym6AYBu0qzT8AcHdI=
 golang.org/x/exp v0.0.0-20240808152545-0cdaa3abc0fa/go.mod h1:akd2r19cwCdwSwWeIdzYQGa/EZZyqcOdwWiwj5L5eKQ=
+golang.org/x/exp v0.0.0-20240823005443-9b4947da3948 h1:kx6Ds3MlpiUHKj7syVnbp57++8WpuKPcR5yjLBjvLEA=
+golang.org/x/exp v0.0.0-20240823005443-9b4947da3948/go.mod h1:akd2r19cwCdwSwWeIdzYQGa/EZZyqcOdwWiwj5L5eKQ=
 golang.org/x/image v0.0.0-20190227222117-0694c2d4d067/go.mod h1:kZ7UVZpmo3dzQBMxlp+ypCbDeSB+sBbTgSJuh5dn5js=
 golang.org/x/image v0.0.0-20190802002840-cff245a6509b/go.mod h1:FeLwcggjj3mMvU+oOTbSwawSJRM1uh48EjtB4UJZlP0=
 golang.org/x/lint v0.0.0-20181026193005-c67002cb31c3/go.mod h1:UVdnD1Gm6xHRNCYTkRU2/jEulfH38KcIWyp/GAMgvoE=
@@ -444,10 +454,14 @@ google.golang.org/genproto/googleapis/api v0.0.0-20240808171019-573a1156607a h1:
 google.golang.org/genproto/googleapis/api v0.0.0-20240808171019-573a1156607a/go.mod h1:4+X6GvPs+25wZKbQq9qyAXrwIRExv7w0Ea6MgZLZiDM=
 google.golang.org/genproto/googleapis/api v0.0.0-20240814211410-ddb44dafa142 h1:wKguEg1hsxI2/L3hUYrpo1RVi48K+uTyzKqprwLXsb8=
 google.golang.org/genproto/googleapis/api v0.0.0-20240814211410-ddb44dafa142/go.mod h1:d6be+8HhtEtucleCbxpPW9PA9XwISACu8nvpPqF0BVo=
+google.golang.org/genproto/googleapis/api v0.0.0-20240827150818-7e3bb234dfed h1:3RgNmBoI9MZhsj3QxC+AP/qQhNwpCLOvYDYYsFrhFt0=
+google.golang.org/genproto/googleapis/api v0.0.0-20240827150818-7e3bb234dfed/go.mod h1:OCdP9MfskevB/rbYvHTsXTtKC+3bHWajPdoKgjcYkfo=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20240808171019-573a1156607a h1:EKiZZXueP9/T68B8Nl0GAx9cjbQnCId0yP3qPMgaaHs=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20240808171019-573a1156607a/go.mod h1:Ue6ibwXGpU+dqIcODieyLOcgj7z8+IcskoNIgZxtrFY=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20240814211410-ddb44dafa142 h1:e7S5W7MGGLaSu8j3YjdezkZ+m1/Nm0uRVRMEMGk26Xs=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20240814211410-ddb44dafa142/go.mod h1:UqMtugtsSgubUsoxbuAoiCXvqvErP7Gf0so0mK9tHxU=
+google.golang.org/genproto/googleapis/rpc v0.0.0-20240827150818-7e3bb234dfed h1:J6izYgfBXAI3xTKLgxzTmUltdYaLsuBxFCgDHWJ/eXg=
+google.golang.org/genproto/googleapis/rpc v0.0.0-20240827150818-7e3bb234dfed/go.mod h1:UqMtugtsSgubUsoxbuAoiCXvqvErP7Gf0so0mK9tHxU=
 google.golang.org/grpc v1.2.1-0.20170921194603-d4b75ebd4f9f/go.mod h1:yo6s7OP7yaDglbqo1J04qKzAhqBH6lvTonzMVmEdcZw=
 google.golang.org/grpc v1.19.0/go.mod h1:mqu4LbDTu4XGKhr4mRzUsmM4RtVoemTSY81AxZiDr8c=
 google.golang.org/grpc v1.20.1/go.mod h1:10oTOabMzJvdu6/UiuZezV6QK5dSlG84ov/aaiqXj38=

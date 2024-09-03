@@ -65,6 +65,7 @@
           <Value Key="date_time" Passes="1" Type="String">[DateTime]</Value>
           <Value Key="customer_id" Passes="1" Type="String">[Contact::ContactID]</Value>
           <Value Key="queue_extension" Passes="1" Type="String">[QueueExtension]</Value>
+          <Value Key="direction" Passes="1" Type="String">[CallDirection]</Value>
         </PostValues>
       </Request>
       <Variables />

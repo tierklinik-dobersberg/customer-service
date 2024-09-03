@@ -78,7 +78,7 @@ func (svc *CustomerService) SearchCustomerStream(ctx context.Context, stream *co
 					return
 				}
 
-				res, err := svc.repo.SearchQuery(ctx, query)
+				res, _, err := svc.repo.SearchQuery(ctx, query, nil)
 				if err != nil {
 					slog.ErrorContext(ctx, "failed to search customers", slog.Any("error", err.Error()))
 
@@ -109,6 +109,7 @@ func (svc *CustomerService) SearchCustomerStream(ctx context.Context, stream *co
 			if err := stream.Send(&customerv1.SearchCustomerResponse{
 				Results:       response,
 				CorrelationId: msg.CorrelationId,
+				TotalResults:  int64(len(response)),
 			}); err != nil {
 				slog.ErrorContext(ctx, "failed to send stream message", slog.Any("error", err.Error()))
 			}
@@ -132,17 +133,14 @@ func (svc *CustomerService) SearchCustomer(ctx context.Context, msg *connect.Req
 		msg.Msg.Queries = append(msg.Msg.Queries, &customerv1.CustomerQuery{})
 	}
 
-	for _, query := range msg.Msg.Queries {
-		results, err := svc.repo.SearchQuery(ctx, query)
-		if err != nil {
-			return nil, err
-		}
-
-		customers = append(customers, results...)
+	customers, count, err := svc.repo.SearchQueries(ctx, msg.Msg.Queries, msg.Msg.Pagination)
+	if err != nil {
+		return nil, err
 	}
 
 	return connect.NewResponse(&customerv1.SearchCustomerResponse{
-		Results: customers,
+		Results:      customers,
+		TotalResults: int64(count),
 	}), nil
 }
 

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"net/http"
 
 	connect "github.com/bufbuild/connect-go"
 	"github.com/sirupsen/logrus"
@@ -50,13 +49,17 @@ func execute(root *cli.Root, args []string) {
 	}
 
 	logrus.Infof("creating http client")
-	tr := &http.Transport{
-		ForceAttemptHTTP2: true,
-	}
+	/*
+		tr := &http.Transport{
+			ForceAttemptHTTP2: true,
+		}
 
-	httpCli := &http.Client{
-		Transport: tr,
-	}
+		httpCli := &http.Client{
+			Transport: tr,
+		}
+	*/
+
+	httpCli := cli.NewInsecureHttp2Client()
 
 	cli := customerv1connect.NewCustomerImportServiceClient(httpCli, root.Config().BaseURLS.CustomerService, connect.WithInterceptors(
 		NewAuthInterceptor(root),

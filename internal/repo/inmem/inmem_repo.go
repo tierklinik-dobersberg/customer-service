@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 
+	commonv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/common/v1"
 	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
 	"github.com/tierklinik-dobersberg/customer-service/internal/repo"
 	"github.com/tierklinik-dobersberg/customer-service/pkg/importer"
@@ -105,7 +106,7 @@ func (r *Repository) LookupCustomerById(ctx context.Context, id string) (*custom
 	return customerClone, r.cloneCustomerStates(customerClone.Id), nil
 }
 
-func (r *Repository) LookupCustomerByMail(ctx context.Context, mail string) ([]*customerv1.CustomerResponse, error) {
+func (r *Repository) LookupCustomerByMail(ctx context.Context, mail string, _ *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error) {
 	var results []*customerv1.CustomerResponse
 
 	r.l.RLock()
@@ -122,10 +123,10 @@ func (r *Repository) LookupCustomerByMail(ctx context.Context, mail string) ([]*
 		}
 	}
 
-	return results, nil
+	return results, len(results), nil
 }
 
-func (r *Repository) LookupCustomerByPhone(ctx context.Context, phone string) ([]*customerv1.CustomerResponse, error) {
+func (r *Repository) LookupCustomerByPhone(ctx context.Context, phone string, _ *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error) {
 	var results []*customerv1.CustomerResponse
 
 	r.l.RLock()
@@ -142,10 +143,10 @@ func (r *Repository) LookupCustomerByPhone(ctx context.Context, phone string) ([
 		}
 	}
 
-	return results, nil
+	return results, len(results), nil
 }
 
-func (r *Repository) LookupCustomerByName(ctx context.Context, name string) ([]*customerv1.CustomerResponse, error) {
+func (r *Repository) LookupCustomerByName(ctx context.Context, name string, _ *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error) {
 	var results []*customerv1.CustomerResponse
 
 	r.l.RLock()
@@ -161,7 +162,7 @@ func (r *Repository) LookupCustomerByName(ctx context.Context, name string) ([]*
 		}
 	}
 
-	return results, nil
+	return results, len(results), nil
 }
 
 func (r *Repository) cloneCustomerStates(id string) []*customerv1.ImportState {
@@ -174,7 +175,7 @@ func (r *Repository) cloneCustomerStates(id string) []*customerv1.ImportState {
 	return states
 }
 
-func (r *Repository) ListCustomers(_ context.Context) ([]*customerv1.CustomerResponse, error) {
+func (r *Repository) ListCustomers(_ context.Context, _ *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error) {
 	r.l.RLock()
 	defer r.l.RUnlock()
 
@@ -187,7 +188,7 @@ func (r *Repository) ListCustomers(_ context.Context) ([]*customerv1.CustomerRes
 		})
 	}
 
-	return results, nil
+	return results, len(results), nil
 }
 
 var _ repo.Backend = (*Repository)(nil)

@@ -9,7 +9,9 @@ import (
 	"github.com/chzyer/readline"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	commonv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/common/v1"
 	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
+	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1/customerv1connect"
 	"github.com/tierklinik-dobersberg/apis/pkg/cli"
 )
 
@@ -18,7 +20,7 @@ func GetSearchStreamCommand(root *cli.Root) *cobra.Command {
 		Use:  "stream",
 		Args: cobra.ExactArgs(0),
 		Run: func(cmd *cobra.Command, args []string) {
-			cli := root.Customer()
+			cli := customerv1connect.NewCustomerServiceClient(cli.NewInsecureHttp2Client(), root.Config().BaseURLS.CustomerService)
 
 			ctx, cancel := context.WithCancel(root.Context())
 			defer cancel()
@@ -108,11 +110,13 @@ func GetSearchStreamCommand(root *cli.Root) *cobra.Command {
 
 func GetSearchCommand(root *cli.Root) *cobra.Command {
 	var (
-		names   []string
-		phones  []string
-		mails   []string
-		ids     []string
-		analyze bool
+		names    []string
+		phones   []string
+		mails    []string
+		ids      []string
+		analyze  bool
+		pageSize int
+		page     int
 	)
 
 	cmd := &cobra.Command{
@@ -156,6 +160,15 @@ func GetSearchCommand(root *cli.Root) *cobra.Command {
 				})
 			}
 
+			if pageSize > 0 {
+				req.Pagination = &commonv1.Pagination{
+					PageSize: int32(pageSize),
+					Kind: &commonv1.Pagination_Page{
+						Page: int32(page),
+					},
+				}
+			}
+
 			res, err := cli.SearchCustomer(root.Context(), connect.NewRequest(req))
 			if err != nil {
 				logrus.Fatalf(err.Error())
@@ -178,6 +191,8 @@ func GetSearchCommand(root *cli.Root) *cobra.Command {
 		f.StringSliceVar(&mails, "mail", nil, "")
 		f.StringSliceVar(&ids, "id", nil, "")
 		f.BoolVar(&analyze, "analyze", false, "Analyze customers")
+		f.IntVar(&pageSize, "page-size", 0, "")
+		f.IntVar(&page, "page", 0, "")
 	}
 
 	return cmd

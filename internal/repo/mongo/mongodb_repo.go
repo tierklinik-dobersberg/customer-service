@@ -3,12 +3,16 @@ package mongo
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"log/slog"
 	"time"
 
 	"github.com/hashicorp/go-multierror"
+	"github.com/nyaruka/phonenumbers"
+	commonv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/common/v1"
 	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
 	"github.com/tierklinik-dobersberg/customer-service/internal/repo"
 	"go.mongodb.org/mongo-driver/bson"
@@ -113,8 +117,8 @@ func (r *Repository) LockCustomer(ctx context.Context, id string) (func(), error
 	}, nil
 }
 
-func (r *Repository) ListCustomers(ctx context.Context) ([]*customerv1.CustomerResponse, error) {
-	return r.searchCustomers(ctx, bson.M{})
+func (r *Repository) ListCustomers(ctx context.Context, p *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error) {
+	return r.searchCustomers(ctx, bson.M{}, p)
 }
 
 func (r *Repository) LookupCustomerById(ctx context.Context, id string) (*customerv1.Customer, []*customerv1.ImportState, error) {
@@ -171,38 +175,209 @@ func (r *Repository) LookupCustomerByRef(ctx context.Context, importer, ref stri
 	return customer.Customer, customer.States, nil
 }
 
-func (r *Repository) LookupCustomerByName(ctx context.Context, name string) ([]*customerv1.CustomerResponse, error) {
+func (r *Repository) LookupCustomerByName(ctx context.Context, name string, p *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error) {
 	slog.InfoContext(ctx, "searching customers by name", slog.Any("name", name))
 
 	return r.searchCustomers(ctx, bson.M{
 		"$text": bson.M{
 			"$search": name,
 		},
-	})
+	}, p)
 }
 
-func (r *Repository) LookupCustomerByMail(ctx context.Context, mail string) ([]*customerv1.CustomerResponse, error) {
+func (r *Repository) LookupCustomerByMail(ctx context.Context, mail string, p *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error) {
 	slog.InfoContext(ctx, "searching customers by mail", slog.Any("mail", mail))
 
 	return r.searchCustomers(ctx, bson.M{
 		"customer.emailAddresses": mail,
-	})
+	}, p)
 }
 
-func (r *Repository) LookupCustomerByPhone(ctx context.Context, phone string) ([]*customerv1.CustomerResponse, error) {
-	slog.InfoContext(ctx, "searching customers by phone number", slog.Any("phone", phone))
+func (r *Repository) LookupCustomerByPhone(ctx context.Context, phone string, p *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error) {
+	slog.InfoContext(ctx, "searching customers by phone number", slog.Any("phstringone", phone))
 
 	return r.searchCustomers(ctx, bson.M{
 		"customer.phoneNumbers": phone,
-	})
+	}, p)
 }
 
-func (r *Repository) searchCustomers(ctx context.Context, filter bson.M, opts ...*options.FindOptions) ([]*customerv1.CustomerResponse, error) {
-	slog.DebugContext(ctx, "searching customers", slog.Any("filter", filter))
+func (r *Repository) SearchQueries(ctx context.Context, queries []*customerv1.CustomerQuery, p *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error) {
+	var phoneNumbers []string
+	var lastNames string
+	var ids []primitive.ObjectID
+	var mails []string
 
-	res, err := r.customers.Find(ctx, filter, opts...)
+	for _, q := range queries {
+		switch v := q.Query.(type) {
+		case *customerv1.CustomerQuery_EmailAddress:
+			mails = append(mails, v.EmailAddress)
+		case *customerv1.CustomerQuery_PhoneNumber:
+			phoneNumbers = append(phoneNumbers, v.PhoneNumber)
+		case *customerv1.CustomerQuery_Id:
+			oid, err := primitive.ObjectIDFromHex(v.Id)
+			if err != nil {
+				return nil, 0, fmt.Errorf("failed to convert customer id to object id: %w", err)
+			}
+
+			ids = append(ids, oid)
+		case *customerv1.CustomerQuery_Name:
+			if v.Name.LastName != "" {
+				lastNames = fmt.Sprintf("%s %q", lastNames, v.Name.LastName)
+			}
+		case *customerv1.CustomerQuery_InternalReference:
+			return nil, 0, fmt.Errorf("internal reference is not supported in SearchQueries yet")
+		}
+	}
+
+	ors := bson.A{}
+
+	if len(phoneNumbers) > 0 {
+		var formatted []string
+
+		for _, p := range phoneNumbers {
+			parsed, err := phonenumbers.Parse(p, "AT")
+			if err == nil {
+				formatted = append(formatted, phonenumbers.Format(parsed, phonenumbers.INTERNATIONAL))
+			} else {
+				formatted = append(formatted, p)
+			}
+		}
+
+		ors = append(ors, bson.E{
+			Key: "customer.phoneNumbers",
+			Value: bson.M{
+				"$in": formatted,
+			},
+		})
+	}
+
+	if len(mails) > 0 {
+		ors = append(ors, bson.E{
+			Key: "customer.emailAddresses",
+			Value: bson.M{
+				"$in": mails,
+			},
+		})
+	}
+
+	if len(ids) > 0 {
+		ors = append(ors, bson.E{
+			Key: "_id",
+			Value: bson.M{
+				"$in": ids,
+			},
+		})
+	}
+
+	filter := bson.M{}
+
+	switch len(ors) {
+	case 0:
+	case 1:
+		filter[ors[0].(bson.E).Key] = ors[0].(bson.E).Value
+	default:
+		filter["$or"] = ors
+	}
+
+	if len(lastNames) > 0 {
+		filter["$text"] = bson.M{
+			"$search": lastNames,
+		}
+	}
+
+	return r.searchCustomers(ctx, filter, p)
+}
+
+func (r *Repository) searchCustomers(ctx context.Context, filters bson.M, p *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error) {
+	slog.DebugContext(ctx, "searching customers", slog.Any("filter", filters))
+
+	pagination := []bson.D{}
+
+	if p != nil {
+		if len(p.SortBy) > 0 {
+			sort := bson.D{}
+			for _, field := range p.SortBy {
+				var dir int
+				switch field.Direction {
+				case commonv1.SortDirection_SORT_DIRECTION_ASC:
+					dir = 1
+				default:
+					dir = -1
+				}
+
+				sort = append(sort, bson.E{Key: field.FieldName, Value: dir})
+			}
+
+			pagination = append(pagination, bson.D{
+				{Key: "$sort", Value: sort},
+			})
+		}
+
+		if p.PageSize > 0 {
+			pagination = append(pagination, bson.D{{Key: "$skip", Value: p.PageSize * p.GetPage()}})
+			pagination = append(pagination, bson.D{{Key: "$limit", Value: p.PageSize}})
+		}
+	}
+
+	aggregation := mongo.Pipeline{
+		bson.D{
+			{
+				Key:   "$match",
+				Value: filters,
+			},
+		},
+		bson.D{
+			{
+				Key: "$facet",
+				Value: bson.M{
+					"metadata": []bson.D{
+						{
+							{Key: "$count", Value: "totalCount"},
+						},
+					},
+					"data": pagination,
+				},
+			},
+		},
+	}
+
+	blob, _ := json.MarshalIndent(aggregation, "", "  ")
+	log.Println(string(blob))
+
+	res, err := r.customers.Aggregate(ctx, aggregation)
 	if err != nil {
-		return nil, fmt.Errorf("failed to perform find operation: %w", err)
+		slog.Error("failed to perform aggregate", "error", err)
+		return nil, 0, err
+	}
+
+	/*
+		var tmp []any
+		if err := res.All(ctx, &tmp); err != nil {
+			return nil, 0, err
+		}
+
+		blob, _ = json.MarshalIndent(tmp, "", "  ")
+		log.Println(string(blob))
+	*/
+
+	var result []struct {
+		Metadata []struct {
+			TotalCount int `bson:"totalCount"`
+		} `bson:"metadata"`
+		Data []bson.M
+	}
+
+	if err := res.All(ctx, &result); err != nil {
+		return nil, 0, fmt.Errorf("failed to decode result: %w", err)
+	}
+
+	// nothing found
+	if len(result) == 0 {
+		return nil, 0, nil
+	}
+
+	if len(result) > 1 {
+		slog.Warn("received unexpected result count for aggregation state", "count", len(result))
 	}
 
 	var (
@@ -210,14 +385,7 @@ func (r *Repository) searchCustomers(ctx context.Context, filter bson.M, opts ..
 		merr    = new(multierror.Error)
 	)
 
-	for res.Next(ctx) {
-		var m bson.M
-		if err := res.Decode(&m); err != nil {
-			merr.Errors = append(merr.Errors, fmt.Errorf("failed to decode record: %w", err))
-
-			continue
-		}
-
+	for _, m := range result[0].Data {
 		customer, err := r.bsonToCustomer(m)
 		if err != nil {
 			merr.Errors = append(merr.Errors, fmt.Errorf("failed to convert record from BSON: %w", err))
@@ -232,11 +400,18 @@ func (r *Repository) searchCustomers(ctx context.Context, filter bson.M, opts ..
 		merr.Errors = append(merr.Errors, fmt.Errorf("mongodb cursor error: %w", res.Err()))
 	}
 
-	return results, merr.ErrorOrNil()
+	if len(result[0].Metadata) == 0 {
+		slog.Warn("got empty metadata response")
+		return results, len(results), merr.ErrorOrNil()
+	}
+
+	return results, result[0].Metadata[0].TotalCount, merr.ErrorOrNil()
 
 }
 
 func (repo *Repository) setup(ctx context.Context) error {
+	repo.customers.Indexes().DropOne(ctx, "customer.lastName_text")
+
 	if _, err := repo.locks.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys: bson.D{
 			{Key: "id", Value: 1},
@@ -251,6 +426,10 @@ func (repo *Repository) setup(ctx context.Context) error {
 			Keys: bson.D{
 				{
 					Key:   "customer.lastName",
+					Value: "text",
+				},
+				{
+					Key:   "customer.firstName",
 					Value: "text",
 				},
 			},

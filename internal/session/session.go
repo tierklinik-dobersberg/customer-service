@@ -137,7 +137,7 @@ func (session *ImportSession) handleCustomerLookup(ctx context.Context, correlat
 		v.Importer = session.importer
 	}
 
-	results, err := session.store.SearchQuery(ctx, msg.LookupCustomer.Query)
+	results, _, err := session.store.SearchQuery(ctx, msg.LookupCustomer.Query, nil)
 	if err != nil && !errors.Is(err, repo.ErrCustomerNotFound) {
 		slog.ErrorContext(ctx, "failed to search customers", slog.Any("error", err.Error()))
 	}
@@ -183,7 +183,7 @@ func (session *ImportSession) handleUpsert(ctx context.Context, correlationId st
 	// try to find by phone number
 	if customer == nil {
 		for _, phone := range msg.UpsertCustomer.Customer.PhoneNumbers {
-			res, err := session.store.LookupCustomerByPhone(ctx, phone)
+			res, _, err := session.store.LookupCustomerByPhone(ctx, phone, nil)
 			if err != nil {
 				return err
 			}

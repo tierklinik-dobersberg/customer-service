@@ -36,7 +36,7 @@ func (svc *CustomerService) CRMLookupHandler(w http.ResponseWriter, req *http.Re
 		formatted = phonenumbers.Format(parsed, phonenumbers.INTERNATIONAL)
 	}
 
-	res, err := svc.repo.LookupCustomerByPhone(req.Context(), formatted)
+	res, _, err := svc.repo.LookupCustomerByPhone(req.Context(), formatted, nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
