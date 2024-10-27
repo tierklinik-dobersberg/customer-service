@@ -154,11 +154,11 @@ func main() {
 	}
 
 	if err := wellknown.CustomerService.Register(ctx, catalog, cfg.AdminListenAddress); err != nil {
-		logrus.Fatalf("failed to register customer-service at service catalog: %w", err)
+		logrus.Fatalf("failed to register customer-service at service catalog: %s", err)
 	}
 
 	if err := wellknown.CustomerImportService.Register(ctx, catalog, cfg.AdminListenAddress); err != nil {
-		logrus.Fatalf("failed to register customer-import-service at service catalog: %w", err)
+		logrus.Fatalf("failed to register customer-import-service at service catalog: %s", err)
 	}
 
 	// Create the server
