@@ -13,6 +13,7 @@ import (
 	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/idm/v1/idmv1connect"
 	"github.com/tierklinik-dobersberg/apis/pkg/auth"
 	"github.com/tierklinik-dobersberg/apis/pkg/cors"
+	"github.com/tierklinik-dobersberg/apis/pkg/discovery"
 	"github.com/tierklinik-dobersberg/apis/pkg/discovery/consuldiscover"
 	"github.com/tierklinik-dobersberg/apis/pkg/discovery/wellknown"
 	"github.com/tierklinik-dobersberg/apis/pkg/log"
@@ -153,11 +154,10 @@ func main() {
 		logrus.Fatalf("failed to get service catalog client: %s", err)
 	}
 
-	if err := wellknown.CustomerService.Register(ctx, catalog, cfg.AdminListenAddress); err != nil {
-		logrus.Fatalf("failed to register customer-service at service catalog: %s", err)
-	}
-
-	if err := wellknown.CustomerImportService.Register(ctx, catalog, cfg.AdminListenAddress); err != nil {
+	if err := discovery.Register(ctx, catalog, discovery.ServiceInstance{
+		Name:    wellknown.CustomerV1ServiceScope,
+		Address: cfg.AdminListenAddress,
+	}); err != nil {
 		logrus.Fatalf("failed to register customer-import-service at service catalog: %s", err)
 	}
 
