@@ -3,6 +3,7 @@ package customerservice
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"sync"
@@ -11,6 +12,7 @@ import (
 	"github.com/bufbuild/connect-go"
 	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
 	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1/customerv1connect"
+	"github.com/tierklinik-dobersberg/customer-service/internal/config"
 	"github.com/tierklinik-dobersberg/customer-service/internal/repo"
 	"github.com/tierklinik-dobersberg/customer-service/internal/session"
 )
@@ -19,11 +21,13 @@ type CustomerService struct {
 	customerv1connect.UnimplementedCustomerServiceHandler
 
 	repo     repo.Repo
+	config   *config.Config
 	resolver session.PriorityResolver
 }
 
-func New(repo repo.Repo, resolver session.PriorityResolver) *CustomerService {
+func New(config *config.Config, repo repo.Repo, resolver session.PriorityResolver) *CustomerService {
 	return &CustomerService{
+		config:   config,
 		repo:     repo,
 		resolver: resolver,
 	}
@@ -160,9 +164,21 @@ func (svc *CustomerService) UpdateCustomer(ctx context.Context, req *connect.Req
 
 			return nil, err
 		}
+	} else if ph := req.Msg.GetCustomer().GetPhoneNumbers(); len(ph) > 0 {
+		for _, p := range ph {
+			customers, _, err := svc.repo.LookupCustomerByPhone(ctx, p, nil)
+			if err != nil {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to search customers: %w", err))
+			}
+
+			if len(customers) == 1 {
+				customer = customers[0].Customer
+				states = customers[0].States
+			}
+		}
 	}
 
-	p := session.NewPatcher("user", "ref", svc.resolver, customer, states)
+	p := session.NewPatcher("user", "ref", svc.config.Country, svc.resolver, customer, states)
 
 	if err := p.Apply(req.Msg.Customer); err != nil {
 		return nil, err

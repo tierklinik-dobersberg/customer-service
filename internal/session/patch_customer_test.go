@@ -38,7 +38,7 @@ func getCustomer(t *testing.T, importer, firstName, lastName string, phone []str
 		EmailAddresses: mail,
 	}
 
-	patcher := NewPatcher(importer, "ref", new(resolver), new(customerv1.Customer), nil)
+	patcher := NewPatcher(importer, "ref", "AT", new(resolver), new(customerv1.Customer), nil)
 
 	require.NoError(t, patcher.Apply(imported), "applying changes should not return an erro")
 
@@ -64,7 +64,7 @@ func Test_Patch_Empty(t *testing.T) {
 
 	output := repo.Clone(imported)
 
-	patcher := NewPatcher("test", "ref", new(resolver), existing, nil)
+	patcher := NewPatcher("test", "ref", "AT", new(resolver), existing, nil)
 
 	require.NotEmpty(t, patcher.States)
 	require.NotNil(t, patcher.currentState)
@@ -110,7 +110,7 @@ func Test_Patch_Empty(t *testing.T) {
 func TestPruneAttributes(t *testing.T) {
 	existingCustomer, existingStates := getCustomer(t, "test", "existing-firstname", "existing-lastname", []string{"1234"}, nil, nil)
 
-	p := NewPatcher("test", "ref", new(resolver), existingCustomer, existingStates)
+	p := NewPatcher("test", "ref", "AT", new(resolver), existingCustomer, existingStates)
 	require.NotEmpty(t, p.currentState.OwnedAttributes)
 
 	require.NoError(t, p.Apply(new(customerv1.Customer)))
@@ -123,7 +123,7 @@ func TestUpdatesSameImporter(t *testing.T) {
 		makeAddr("1", "city", "street"),
 	})
 
-	p := NewPatcher("test", "ref", new(resolver), existingCustomer, existingStates)
+	p := NewPatcher("test", "ref", "AT", new(resolver), existingCustomer, existingStates)
 
 	require.NoError(t, p.Apply(updatedCustomer))
 
@@ -151,7 +151,7 @@ func TestPriority(t *testing.T) {
 		makeAddr("1", "city", "street"),
 	})
 
-	p := NewPatcher("foo", "ref", new(resolver), existingCustomer, existingStates)
+	p := NewPatcher("foo", "ref", "AT", new(resolver), existingCustomer, existingStates)
 
 	require.NoError(t, p.Apply(updatedCustomer))
 

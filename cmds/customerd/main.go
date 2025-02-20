@@ -121,8 +121,8 @@ func main() {
 	}
 
 	// create a new CallService and add it to the mux.
-	importService := importservice.NewImportService(store, resolver)
-	customerService := customerservice.New(store, resolver)
+	importService := importservice.NewImportService(cfg, store, resolver)
+	customerService := customerservice.New(cfg, store, resolver)
 
 	path, handler := customerv1connect.NewCustomerImportServiceHandler(importService, connect.WithInterceptors(interceptors...))
 	serveMux.Handle(path, handler)

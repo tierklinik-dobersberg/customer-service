@@ -21,6 +21,7 @@ type ImportSession struct {
 	wg       sync.WaitGroup
 	importer string
 	resolver PriorityResolver
+	country string
 
 	sendQueue chan *customerv1.ImportSessionResponse
 
@@ -29,10 +30,11 @@ type ImportSession struct {
 	lookups          atomic.Uint64
 }
 
-func NewImportSession(stream *ImportStream, store repo.Repo, resolver PriorityResolver) *ImportSession {
+func NewImportSession(country string, stream *ImportStream, store repo.Repo, resolver PriorityResolver) *ImportSession {
 	return &ImportSession{
 		resolver:  resolver,
 		stream:    stream,
+		country: country,
 		store:     store,
 		sendQueue: make(chan *customerv1.ImportSessionResponse, 100),
 	}
@@ -206,7 +208,7 @@ func (session *ImportSession) handleUpsert(ctx context.Context, correlationId st
 		defer unlock()
 	}
 
-	p := NewPatcher(session.importer, msg.UpsertCustomer.InternalReference, session.resolver, customer, states)
+	p := NewPatcher(session.importer, msg.UpsertCustomer.InternalReference, session.country, session.resolver, customer, states)
 
 	if err := p.Apply(msg.UpsertCustomer.GetCustomer()); err != nil {
 		return fmt.Errorf("failed to apply updates: %w", err)

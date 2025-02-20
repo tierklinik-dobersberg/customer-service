@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/nyaruka/phonenumbers"
 	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
 	"github.com/tierklinik-dobersberg/customer-service/internal/repo"
 	"google.golang.org/protobuf/proto"
@@ -21,12 +22,13 @@ type Patcher struct {
 	Result   *customerv1.Customer
 
 	resolver PriorityResolver
+	country  string
 
 	States       []*customerv1.ImportState
 	currentState *customerv1.ImportState
 }
 
-func NewPatcher(importer, ref string, resolver PriorityResolver, existing *customerv1.Customer, states []*customerv1.ImportState) *Patcher {
+func NewPatcher(importer, ref, country string, resolver PriorityResolver, existing *customerv1.Customer, states []*customerv1.ImportState) *Patcher {
 	if existing == nil {
 		existing = new(customerv1.Customer)
 	}
@@ -49,6 +51,7 @@ func NewPatcher(importer, ref string, resolver PriorityResolver, existing *custo
 		Ref:          ref,
 		currentState: currentState,
 		resolver:     resolver,
+		country:      country,
 	}
 
 	return p
@@ -75,6 +78,16 @@ func (p *Patcher) Apply(importedCustomer *customerv1.Customer) error {
 		}
 	}); err != nil {
 		return fmt.Errorf("email_addresses: %w", err)
+	}
+
+	// first, parse and validate all phone numers
+	for idx, pn := range importedCustomer.PhoneNumbers {
+		parsed, err := phonenumbers.Parse(pn, p.country)
+		if err != nil {
+			return fmt.Errorf("invalid phone number %q: %w", pn, err)
+		}
+
+		importedCustomer.PhoneNumbers[idx] = phonenumbers.Format(parsed, phonenumbers.INTERNATIONAL)
 	}
 
 	if err := p.applyStringList(&p.Result.PhoneNumbers, importedCustomer.PhoneNumbers, func(value string) *customerv1.OwnedAttribute {
