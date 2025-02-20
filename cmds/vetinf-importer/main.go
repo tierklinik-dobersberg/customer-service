@@ -3,10 +3,8 @@ package main
 import (
 	"context"
 
-	connect "github.com/bufbuild/connect-go"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1/customerv1connect"
 	"github.com/tierklinik-dobersberg/apis/pkg/cli"
 	"github.com/tierklinik-dobersberg/customer-service/pkg/importer"
 )
@@ -49,21 +47,10 @@ func execute(root *cli.Root, args []string) {
 	}
 
 	logrus.Infof("creating http client")
-	/*
-		tr := &http.Transport{
-			ForceAttemptHTTP2: true,
-		}
 
-		httpCli := &http.Client{
-			Transport: tr,
-		}
-	*/
+	logrus.Infof("connecting to %s", root.Config().BaseURLS.CustomerService)
 
-	httpCli := cli.NewInsecureHttp2Client()
-
-	cli := customerv1connect.NewCustomerImportServiceClient(httpCli, root.Config().BaseURLS.CustomerService, connect.WithInterceptors(
-		NewAuthInterceptor(root),
-	))
+	cli := root.CustomerImport()
 
 	stream, _, err := exporter.ExportCustomers(context.Background())
 	if err != nil {
