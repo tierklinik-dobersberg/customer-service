@@ -205,6 +205,7 @@ func (r *Repository) LookupCustomerByPhone(ctx context.Context, phone string, p 
 func (r *Repository) SearchQueries(ctx context.Context, queries []*customerv1.CustomerQuery, p *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error) {
 	var phoneNumbers []string
 	var lastNames []string
+	var firstNames []string
 	var ids []primitive.ObjectID
 	var mails []string
 
@@ -224,6 +225,10 @@ func (r *Repository) SearchQueries(ctx context.Context, queries []*customerv1.Cu
 		case *customerv1.CustomerQuery_Name:
 			if v.Name.LastName != "" {
 				lastNames = append(lastNames, v.Name.LastName)
+			}
+
+			if v.Name.FirstName != "" {
+				firstNames = append(firstNames, v.Name.FirstName)
 			}
 		case *customerv1.CustomerQuery_InternalReference:
 			return nil, 0, fmt.Errorf("internal reference is not supported in SearchQueries yet")
@@ -276,6 +281,18 @@ func (r *Repository) SearchQueries(ctx context.Context, queries []*customerv1.Cu
 		for _, n := range lastNames {
 			ors = append(ors, bson.E{
 				Key: "customer.lastName",
+				Value: bson.M{
+					"$regex":   fmt.Sprintf("%s.*", regexp.QuoteMeta(n)),
+					"$options": "i",
+				},
+			})
+		}
+	}
+
+	if len(firstNames) > 0 {
+		for _, n := range firstNames {
+			ors = append(ors, bson.E{
+				Key: "customer.firstName",
 				Value: bson.M{
 					"$regex":   fmt.Sprintf("%s.*", regexp.QuoteMeta(n)),
 					"$options": "i",
