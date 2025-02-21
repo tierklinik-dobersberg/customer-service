@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
+	"regexp"
 	"time"
 
 	"github.com/hashicorp/go-multierror"
@@ -203,7 +204,7 @@ func (r *Repository) LookupCustomerByPhone(ctx context.Context, phone string, p 
 
 func (r *Repository) SearchQueries(ctx context.Context, queries []*customerv1.CustomerQuery, p *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error) {
 	var phoneNumbers []string
-	var lastNames string
+	var lastNames []string
 	var ids []primitive.ObjectID
 	var mails []string
 
@@ -222,7 +223,7 @@ func (r *Repository) SearchQueries(ctx context.Context, queries []*customerv1.Cu
 			ids = append(ids, oid)
 		case *customerv1.CustomerQuery_Name:
 			if v.Name.LastName != "" {
-				lastNames = fmt.Sprintf("%s %q", lastNames, v.Name.LastName)
+				lastNames = append(lastNames, v.Name.LastName)
 			}
 		case *customerv1.CustomerQuery_InternalReference:
 			return nil, 0, fmt.Errorf("internal reference is not supported in SearchQueries yet")
@@ -271,6 +272,18 @@ func (r *Repository) SearchQueries(ctx context.Context, queries []*customerv1.Cu
 
 	filter := bson.M{}
 
+	if len(lastNames) > 0 {
+		for _, n := range lastNames {
+			ors = append(ors, bson.E{
+				Key: "lastName",
+				Value: bson.M{
+					"$regex":   fmt.Sprintf(".*%s.*", regexp.QuoteMeta(n)),
+					"$options": "i",
+				},
+			})
+		}
+	}
+
 	switch len(ors) {
 	case 0:
 	case 1:
@@ -280,9 +293,11 @@ func (r *Repository) SearchQueries(ctx context.Context, queries []*customerv1.Cu
 	}
 
 	if len(lastNames) > 0 {
-		filter["$text"] = bson.M{
-			"$search": lastNames,
-		}
+		/*
+			filter["$text"] = bson.M{
+				"$search": lastNames,
+			}
+		*/
 	}
 
 	return r.searchCustomers(ctx, filter, p)
