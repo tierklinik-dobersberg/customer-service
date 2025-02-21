@@ -277,7 +277,7 @@ func (r *Repository) SearchQueries(ctx context.Context, queries []*customerv1.Cu
 			ors = append(ors, bson.E{
 				Key: "customer.lastName",
 				Value: bson.M{
-					"$regex":   fmt.Sprintf(".*%s.*", regexp.QuoteMeta(n)),
+					"$regex":   fmt.Sprintf("%s.*", regexp.QuoteMeta(n)),
 					"$options": "i",
 				},
 			})
