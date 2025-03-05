@@ -311,7 +311,17 @@ func (r *Repository) SearchQueries(ctx context.Context, queries []*customerv1.Cu
 	switch len(ors) {
 	case 0:
 	case 1:
-		filter[ors[0].(bson.E).Key] = ors[0].(bson.E).Value
+		first := ors[0]
+
+		switch v := first.(type) {
+		case bson.E:
+			filter[v.Key] = v.Value
+		case bson.M:
+			filter = v
+
+		default:
+			return nil, 0, fmt.Errorf("unexpected query type %T", v)
+		}
 	default:
 		filter["$or"] = ors
 	}
