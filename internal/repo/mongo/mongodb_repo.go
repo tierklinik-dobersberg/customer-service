@@ -203,11 +203,16 @@ func (r *Repository) LookupCustomerByPhone(ctx context.Context, phone string, p 
 }
 
 func (r *Repository) SearchQueries(ctx context.Context, queries []*customerv1.CustomerQuery, p *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error) {
+	type nameSearch struct {
+		firstName string
+		lastName  string
+	}
+
 	var phoneNumbers []string
-	var lastNames []string
-	var firstNames []string
 	var ids []primitive.ObjectID
 	var mails []string
+
+	var names []nameSearch
 
 	for _, q := range queries {
 		switch v := q.Query.(type) {
@@ -223,12 +228,18 @@ func (r *Repository) SearchQueries(ctx context.Context, queries []*customerv1.Cu
 
 			ids = append(ids, oid)
 		case *customerv1.CustomerQuery_Name:
+			s := nameSearch{}
+
 			if v.Name.LastName != "" {
-				lastNames = append(lastNames, v.Name.LastName)
+				s.lastName = v.Name.LastName
 			}
 
 			if v.Name.FirstName != "" {
-				firstNames = append(firstNames, v.Name.FirstName)
+				s.firstName = v.Name.FirstName
+			}
+
+			if s.firstName != "" || s.lastName != "" {
+				names = append(names, s)
 			}
 		case *customerv1.CustomerQuery_InternalReference:
 			return nil, 0, fmt.Errorf("internal reference is not supported in SearchQueries yet")
@@ -277,28 +288,24 @@ func (r *Repository) SearchQueries(ctx context.Context, queries []*customerv1.Cu
 
 	filter := bson.M{}
 
-	if len(lastNames) > 0 {
-		for _, n := range lastNames {
-			ors = append(ors, bson.E{
-				Key: "customer.lastName",
-				Value: bson.M{
-					"$regex":   fmt.Sprintf("%s.*", regexp.QuoteMeta(n)),
-					"$options": "i",
-				},
-			})
-		}
-	}
+	for _, n := range names {
+		query := bson.M{}
 
-	if len(firstNames) > 0 {
-		for _, n := range firstNames {
-			ors = append(ors, bson.E{
-				Key: "customer.firstName",
-				Value: bson.M{
-					"$regex":   fmt.Sprintf("%s.*", regexp.QuoteMeta(n)),
-					"$options": "i",
-				},
-			})
+		if n.lastName != "" {
+			query["customer.lastName"] = bson.M{
+				"$regex":   fmt.Sprintf("^%s.*$", regexp.QuoteMeta(n.lastName)),
+				"$options": "i",
+			}
 		}
+
+		if n.firstName != "" {
+			query["customer.firstName"] = bson.M{
+				"$regex":   fmt.Sprintf("^%s.*$", regexp.QuoteMeta(n.firstName)),
+				"$options": "i",
+			}
+		}
+
+		ors = append(ors, query)
 	}
 
 	switch len(ors) {
@@ -307,14 +314,6 @@ func (r *Repository) SearchQueries(ctx context.Context, queries []*customerv1.Cu
 		filter[ors[0].(bson.E).Key] = ors[0].(bson.E).Value
 	default:
 		filter["$or"] = ors
-	}
-
-	if len(lastNames) > 0 {
-		/*
-			filter["$text"] = bson.M{
-				"$search": lastNames,
-			}
-		*/
 	}
 
 	return r.searchCustomers(ctx, filter, p)
