@@ -2,6 +2,7 @@ package mongo
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 
 	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
@@ -78,7 +79,7 @@ func (repo *Repository) customerToBSON(customer *customerv1.CustomerResponse) (b
 }
 
 func (repo *Repository) bsonToPatient(document bson.M) (*customerv1.Patient, error) {
-	json, err := bson.MarshalExtJSON(document, true, false)
+	jsonBlob, err := json.Marshal(document)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal BSON as JSON: %w", err)
 	}
@@ -88,8 +89,8 @@ func (repo *Repository) bsonToPatient(document bson.M) (*customerv1.Patient, err
 	}
 
 	var patient = new(customerv1.Patient)
-	if err := unmarshaler.Unmarshal(json, patient); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal JSON to protobuf message: %w (blob: %s)", err, string(json))
+	if err := unmarshaler.Unmarshal(jsonBlob, patient); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JSON to protobuf message: %w (blob: %s)", err, string(jsonBlob))
 	}
 
 	switch v := document["_id"].(type) {
