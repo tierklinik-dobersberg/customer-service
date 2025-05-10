@@ -277,7 +277,7 @@ func (session *ImportSession) handlePatientUpsert(ctx context.Context, correlati
 		err      error
 	)
 
-	ref := msg.UpsertPatient.GetPatient().GetInternalRefernce()
+	ref := msg.UpsertPatient.GetPatient().GetInternalReference()
 	if ref == "" {
 		return fmt.Errorf("missing internal patient reference")
 	}

@@ -152,6 +152,7 @@ func (mng *Dispatcher) receiveLoop(ctx context.Context) {
 		case *customerv1.ImportSessionResponse_StartSession:
 		case *customerv1.ImportSessionResponse_Error:
 		case *customerv1.ImportSessionResponse_UpsertCustomerSuccess:
+		case *customerv1.ImportSessionResponse_UpsertPatientSuccess:
 		case *customerv1.ImportSessionResponse_LookupCustomer:
 
 		default:
