@@ -273,8 +273,8 @@ func (session *ImportSession) sendLoop(ctx context.Context) {
 
 func (session *ImportSession) handlePatientUpsert(ctx context.Context, correlationId string, msg *customerv1.ImportSessionRequest_UpsertPatient) error {
 	var (
-		patient *customerv1.Patient
-		err     error
+		existing *customerv1.Patient
+		err      error
 	)
 
 	ref := msg.UpsertPatient.GetPatient().GetInternalRefernce()
@@ -286,23 +286,25 @@ func (session *ImportSession) handlePatientUpsert(ctx context.Context, correlati
 		return fmt.Errorf("missing customer id reference")
 	}
 
-	patient, err = session.patientRepository.LookupPatientByRef(ctx, session.importer, ref)
+	existing, err = session.patientRepository.LookupPatientByRef(ctx, session.importer, ref)
 	if err != nil && !errors.Is(err, repo.ErrNotFound) {
 		return err
 	}
 
-	if patient != nil && patient.PatientId != "" {
-		unlock, err := session.patientRepository.LockPatient(ctx, patient.PatientId)
+	if existing != nil && existing.PatientId != "" {
+		unlock, err := session.patientRepository.LockPatient(ctx, existing.PatientId)
 		if err != nil {
 			return err
 		}
 
 		defer unlock()
+
+		msg.UpsertPatient.Patient.PatientId = existing.PatientId
 	}
 
-	patient.Importer = session.importer
+	msg.UpsertPatient.Patient.Importer = session.importer
 
-	storedPatient, err := session.patientRepository.StorePatient(ctx, patient)
+	storedPatient, err := session.patientRepository.StorePatient(ctx, msg.UpsertPatient.Patient)
 	if err != nil {
 		return fmt.Errorf("failed to store customer: %w", err)
 	}

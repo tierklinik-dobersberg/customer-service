@@ -258,19 +258,21 @@ func (e *Exporter) ExportPatients(ctx context.Context) (<-chan *ExportedPatient,
 
 			var gender customerv1.PatientGender
 
-			switch strings.ToLower(p.Gender) {
-			case "m":
-				gender = customerv1.PatientGender_PATIENT_GENDER_MALE
-			case "mk":
-				gender = customerv1.PatientGender_PATIENT_GENDER_MALE_CASTRATED
-			case "f", "w":
-				gender = customerv1.PatientGender_PATIENT_GENDER_FEMALE
-			case "fk", "wk":
-				gender = customerv1.PatientGender_PATIENT_GENDER_FEMALE_CASTRATED
+			if p.Gender != "" {
+				switch strings.ToLower(p.Gender) {
+				case "m":
+					gender = customerv1.PatientGender_PATIENT_GENDER_MALE
+				case "mk":
+					gender = customerv1.PatientGender_PATIENT_GENDER_MALE_CASTRATED
+				case "f", "w":
+					gender = customerv1.PatientGender_PATIENT_GENDER_FEMALE
+				case "fk", "wk":
+					gender = customerv1.PatientGender_PATIENT_GENDER_FEMALE_CASTRATED
 
-			default:
-				logrus.Infof("failed to get patient gender: %q", p.Gender)
-				continue
+				default:
+					logrus.Infof("failed to get patient gender: %q", p.Gender)
+					continue
+				}
 			}
 
 			additionalData := map[string]any{
