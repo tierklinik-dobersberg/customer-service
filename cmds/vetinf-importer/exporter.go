@@ -9,8 +9,10 @@ import (
 	"github.com/nyaruka/phonenumbers"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
+	commonv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/common/v1"
 	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
 	"github.com/tierklinik-dobersberg/go-vetinf/vetinf"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // ExportedCustomer is a customer exported from a VetInf
@@ -19,6 +21,15 @@ type ExportedCustomer struct {
 	*customerv1.Customer
 	Deleted     bool
 	InternalRef string
+}
+
+// ExportedPatient is a patient exported from a VetInf
+// installation.
+type ExportedPatient struct {
+	*customerv1.Patient
+	Deleted             bool
+	InternalRef         string
+	InternalCustomerRef string
 }
 
 // Exporter is capable of exporting and extracting
@@ -179,4 +190,113 @@ func isValidCustomer(c *vetinf.Customer) bool {
 		return false
 	}
 	return true
+}
+
+func isValidPatient(c *vetinf.SmallAnimalRecord) bool {
+	if c == nil {
+		return false
+	}
+	if c.AnimalID == "" {
+		return false
+	}
+	if c.CustomerID == 0 {
+		return false
+	}
+
+	return true
+}
+
+func (e *Exporter) ExportPatients(ctx context.Context) (<-chan *ExportedPatient, int, error) {
+	animalDB, err := e.db.AnimalDB(e.encoding)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	dataCh, errCh, total := animalDB.StreamAll(ctx)
+
+	patients := make(chan *ExportedPatient, 10)
+
+	go func() {
+		for err := range errCh {
+			logrus.Errorf("export: %s", err)
+		}
+	}()
+
+	go func() {
+		defer close(patients)
+		for p := range dataCh {
+			if !isValidPatient(&p) {
+				logrus.Infof("vetinf: skipping patient record: %+v", p)
+				continue
+			}
+
+			bday, err := commonv1.ParseDate(p.Birthday)
+			if err != nil {
+				logrus.Infof("vetinf: failed to parse animal birthday %q: %w", p.Birthday, err)
+				continue
+			}
+
+			var gender customerv1.PatientGender
+
+			switch strings.ToLower(p.Gender) {
+			case "m":
+				gender = customerv1.PatientGender_PATIENT_GENDER_MALE
+			case "mk":
+				gender = customerv1.PatientGender_PATIENT_GENDER_MALE_CASTRATED
+			case "f", "w":
+				gender = customerv1.PatientGender_PATIENT_GENDER_FEMALE
+			case "fk", "wk":
+				gender = customerv1.PatientGender_PATIENT_GENDER_FEMALE_CASTRATED
+
+			default:
+				logrus.Infof("failed to get patient gender: %q", p.Gender)
+				continue
+			}
+
+			additionalData := map[string]any{
+				"extra1":  p.Extra1,
+				"extra2":  p.Extra2,
+				"extra3":  p.Extra3,
+				"extra4":  p.Extra4,
+				"extra5":  p.Extra5,
+				"extra6":  p.Extra6,
+				"extra7":  p.Extra7,
+				"extra8":  p.Extra8,
+				"extra9":  p.Extra9,
+				"extra10": p.Extra10,
+			}
+
+			extra, err := structpb.NewStruct(additionalData)
+			if err != nil {
+				logrus.Infof("failed to prepare additional patient data: %s", err)
+				continue
+			}
+
+			dbPatient := &ExportedPatient{
+				Deleted:             p.Meta.Deleted,
+				InternalRef:         p.AnimalID,
+				InternalCustomerRef: fmt.Sprintf("%d", p.CustomerID),
+				Patient: &customerv1.Patient{
+					PatientName:      p.Size,
+					Species:          p.Species,
+					Birthday:         bday,
+					Gender:           gender,
+					Breed:            p.Breed,
+					Comment:          p.SpecialDetail,
+					CustomerId:       p.ChipNumber,
+					Color:            p.Color,
+					ExtraData:        extra,
+					InternalRefernce: p.AnimalID,
+				},
+			}
+
+			select {
+			case patients <- dbPatient:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	return patients, total, nil
 }

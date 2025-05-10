@@ -97,7 +97,7 @@ func main() {
 	// Prepare our servemux and add handlers.
 	serveMux := http.NewServeMux()
 
-	var backend repo.Backend
+	var backend repo.CustomerBackend
 
 	if cfg.MongoDBURL != "" {
 		var err error
@@ -112,7 +112,7 @@ func main() {
 		backend = inmem.New()
 	}
 
-	store := repo.New(backend)
+	customerRepository := repo.New(backend)
 
 	resolver := resolver{
 		"user":    2,
@@ -120,9 +120,15 @@ func main() {
 		"carddav": 0,
 	}
 
+	// TODO(ppacher): FIXME and implement PatientBackend in inmem as well.
+	var patientRepository repo.PatientBackend
+	if p, ok := customerRepository.(repo.PatientBackend); ok {
+		patientRepository = p
+	}
+
 	// create a new CallService and add it to the mux.
-	importService := importservice.NewImportService(cfg, store, resolver)
-	customerService := customerservice.New(cfg, store, resolver)
+	importService := importservice.NewImportService(cfg, customerRepository, patientRepository, resolver)
+	customerService := customerservice.New(cfg, customerRepository, resolver)
 
 	path, handler := customerv1connect.NewCustomerImportServiceHandler(importService, connect.WithInterceptors(interceptors...))
 	serveMux.Handle(path, handler)

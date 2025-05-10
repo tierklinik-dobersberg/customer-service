@@ -20,16 +20,16 @@ import (
 type CustomerService struct {
 	customerv1connect.UnimplementedCustomerServiceHandler
 
-	repo     repo.Repo
-	config   *config.Config
-	resolver session.PriorityResolver
+	customerRepository repo.CustomerRepository
+	config             *config.Config
+	resolver           session.PriorityResolver
 }
 
-func New(config *config.Config, repo repo.Repo, resolver session.PriorityResolver) *CustomerService {
+func New(config *config.Config, customerRepo repo.CustomerRepository, resolver session.PriorityResolver) *CustomerService {
 	return &CustomerService{
-		config:   config,
-		repo:     repo,
-		resolver: resolver,
+		config:             config,
+		customerRepository: customerRepo,
+		resolver:           resolver,
 	}
 }
 
@@ -82,7 +82,7 @@ func (svc *CustomerService) SearchCustomerStream(ctx context.Context, stream *co
 					return
 				}
 
-				res, _, err := svc.repo.SearchQuery(ctx, query, nil)
+				res, _, err := svc.customerRepository.PerformCustomerQuery(ctx, query, nil)
 				if err != nil {
 					slog.ErrorContext(ctx, "failed to search customers", slog.Any("error", err.Error()))
 
@@ -137,7 +137,7 @@ func (svc *CustomerService) SearchCustomer(ctx context.Context, msg *connect.Req
 		msg.Msg.Queries = append(msg.Msg.Queries, &customerv1.CustomerQuery{})
 	}
 
-	customers, count, err := svc.repo.SearchQueries(ctx, msg.Msg.Queries, msg.Msg.Pagination)
+	customers, count, err := svc.customerRepository.PerformCustomerQueries(ctx, msg.Msg.Queries, msg.Msg.Pagination)
 	if err != nil {
 		return nil, err
 	}
@@ -156,9 +156,9 @@ func (svc *CustomerService) UpdateCustomer(ctx context.Context, req *connect.Req
 	)
 
 	if id := req.Msg.GetCustomer().GetId(); id != "" {
-		customer, states, err = svc.repo.LookupCustomerById(ctx, id)
+		customer, states, err = svc.customerRepository.LookupCustomerById(ctx, id)
 		if err != nil {
-			if errors.Is(err, repo.ErrCustomerNotFound) {
+			if errors.Is(err, repo.ErrNotFound) {
 				return nil, connect.NewError(connect.CodeNotFound, err)
 			}
 
@@ -166,7 +166,7 @@ func (svc *CustomerService) UpdateCustomer(ctx context.Context, req *connect.Req
 		}
 	} else if ph := req.Msg.GetCustomer().GetPhoneNumbers(); len(ph) > 0 {
 		for _, p := range ph {
-			customers, _, err := svc.repo.LookupCustomerByPhone(ctx, p, nil)
+			customers, _, err := svc.customerRepository.LookupCustomerByPhone(ctx, p, nil)
 			if err != nil {
 				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to search customers: %w", err))
 			}
@@ -178,13 +178,13 @@ func (svc *CustomerService) UpdateCustomer(ctx context.Context, req *connect.Req
 		}
 	}
 
-	p := session.NewPatcher("user", "ref", svc.config.Country, svc.resolver, customer, states)
+	p := session.NewCustomerPatcher("user", "ref", svc.config.Country, svc.resolver, customer, states)
 
 	if err := p.Apply(req.Msg.Customer); err != nil {
 		return nil, err
 	}
 
-	if err := svc.repo.StoreCustomer(ctx, p.Result, p.States); err != nil {
+	if err := svc.customerRepository.StoreCustomer(ctx, p.Result, p.States); err != nil {
 		return nil, err
 	}
 

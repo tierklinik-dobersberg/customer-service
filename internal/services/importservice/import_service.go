@@ -11,24 +11,26 @@ import (
 )
 
 type ImportService struct {
-	config *config.Config
-	repo     repo.Repo
-	resolver session.PriorityResolver
+	config             *config.Config
+	customerRepository repo.CustomerRepository
+	patientRepository  repo.PatientBackend
+	resolver           session.PriorityResolver
 
 	//customerv1connect.UnimplementedCustomerImportServiceHandler
 }
 
-func NewImportService(config *config.Config, repo repo.Repo, resolver session.PriorityResolver) *ImportService {
+func NewImportService(config *config.Config, customerRepo repo.CustomerRepository, patientRepo repo.PatientBackend, resolver session.PriorityResolver) *ImportService {
 	return &ImportService{
-		config: config,
-		repo:     repo,
-		resolver: resolver,
+		config:             config,
+		customerRepository: customerRepo,
+		resolver:           resolver,
+		patientRepository:  patientRepo,
 	}
 }
 
 func (svc *ImportService) ImportSession(ctx context.Context, stream *connect.BidiStream[customerv1.ImportSessionRequest, customerv1.ImportSessionResponse]) error {
 	// create a new import session hand start handling customer updates.
-	session := session.NewImportSession(svc.config.Country, stream, svc.repo, svc.resolver)
+	session := session.NewImportSession(svc.config.Country, stream, svc.customerRepository, svc.patientRepository, svc.resolver)
 
 	return session.Handle(ctx)
 }

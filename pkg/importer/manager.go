@@ -48,6 +48,64 @@ func NewManager(ctx context.Context, importer string, stream ImportStream) (*Man
 	return mng, nil
 }
 
+func (mng *Manager) UpsertPatient(customerRef string, patient *customerv1.Patient) error {
+	// lookup the customer
+	lookupResult := <-mng.dispatcher.Send(&customerv1.ImportSessionRequest{
+		Message: &customerv1.ImportSessionRequest_LookupCustomer{
+			LookupCustomer: &customerv1.LookupCustomerRequest{
+				Query: &customerv1.CustomerQuery{
+					Query: &customerv1.CustomerQuery_InternalReference{
+						InternalReference: &customerv1.InternalReferenceQuery{
+							Importer: mng.dispatcher.importer,
+							Ref:      customerRef,
+						},
+					},
+				},
+			},
+		},
+	})
+
+	if lerr := lookupResult.GetError(); lerr != nil {
+		err := &multierror.Error{}
+
+		for _, e := range lerr.Error {
+			err.Errors = append(err.Errors, errors.New(e))
+		}
+
+		return fmt.Errorf("failed to lookup customer: %w", err)
+	}
+
+	res := lookupResult.GetLookupCustomer()
+	if res == nil || len(res.MatchedCustomers) == 0 {
+		return fmt.Errorf("failed to lookup customer, res is nil or no results found")
+	}
+
+	customer := res.MatchedCustomers[0].Customer
+
+	patient.CustomerId = customer.Id
+	patient.Importer = mng.dispatcher.importer
+
+	upsertResult := <-mng.dispatcher.Send(&customerv1.ImportSessionRequest{
+		Message: &customerv1.ImportSessionRequest_UpsertPatient{
+			UpsertPatient: &customerv1.UpsertPatientRequest{
+				Patient: patient,
+			},
+		},
+	})
+
+	if upsertError := upsertResult.GetError(); upsertError != nil {
+		err := &multierror.Error{}
+
+		for _, e := range upsertError.Error {
+			err.Errors = append(err.Errors, errors.New(e))
+		}
+
+		return fmt.Errorf("failed to upsert patient: %w", err)
+	}
+
+	return nil
+}
+
 func (mng *Manager) upsertCustomer(ref string, customer *customerv1.Customer, extraData *structpb.Struct) error {
 	// send an upsert request
 	upsertResult := <-mng.dispatcher.Send(&customerv1.ImportSessionRequest{

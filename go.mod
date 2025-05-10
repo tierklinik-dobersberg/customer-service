@@ -17,7 +17,7 @@ require (
 	github.com/spf13/afero v1.12.0
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0
-	github.com/tierklinik-dobersberg/apis v0.33.0
+	github.com/tierklinik-dobersberg/apis v0.45.2-0.20250510071337-50a3183a5fb2
 	github.com/tierklinik-dobersberg/go-vetinf v0.1.5
 	go.mongodb.org/mongo-driver v1.17.2
 	golang.org/x/sync v0.11.0

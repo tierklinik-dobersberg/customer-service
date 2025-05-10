@@ -1,7 +1,6 @@
 package mongo
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -17,41 +16,9 @@ import (
 	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
 	"github.com/tierklinik-dobersberg/customer-service/internal/repo"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/bsonrw"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
-	"google.golang.org/protobuf/encoding/protojson"
 )
-
-type Repository struct {
-	customers *mongo.Collection
-	locks     *mongo.Collection
-}
-
-func New(ctx context.Context, uri, dbName string) (*Repository, error) {
-	cli, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create mongodb client: %w", err)
-	}
-
-	if err := cli.Ping(ctx, nil); err != nil {
-		return nil, fmt.Errorf("failed to ping mongodb server: %w", err)
-	}
-
-	db := cli.Database(dbName)
-
-	repo := &Repository{
-		customers: db.Collection("customers"),
-		locks:     db.Collection("locks"),
-	}
-
-	if err := repo.setup(ctx); err != nil {
-		return nil, fmt.Errorf("failed to setup collection: %w", err)
-	}
-
-	return repo, nil
-}
 
 func (r *Repository) StoreCustomer(ctx context.Context, customer *customerv1.Customer, states []*customerv1.ImportState) error {
 	document, err := r.customerToBSON(&customerv1.CustomerResponse{
@@ -75,7 +42,7 @@ func (r *Repository) StoreCustomer(ctx context.Context, customer *customerv1.Cus
 		}
 
 		if res.MatchedCount == 0 {
-			return fmt.Errorf("failed to replace customer %q: %w", customer.Id, repo.ErrCustomerNotFound)
+			return fmt.Errorf("failed to replace customer %q: %w", customer.Id, repo.ErrNotFound)
 		}
 
 	} else {
@@ -98,7 +65,7 @@ func (r *Repository) LockCustomer(ctx context.Context, id string) (func(), error
 
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
-			return func() {}, repo.ErrCustomerLocked
+			return func() {}, repo.ErrRecordLocked
 		}
 
 		return func() {}, fmt.Errorf("failed to create customer lock: %w", err)
@@ -202,7 +169,7 @@ func (r *Repository) LookupCustomerByPhone(ctx context.Context, phone string, p 
 	}, p)
 }
 
-func (r *Repository) SearchQueries(ctx context.Context, queries []*customerv1.CustomerQuery, p *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error) {
+func (r *Repository) PerformCustomerQueries(ctx context.Context, queries []*customerv1.CustomerQuery, p *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error) {
 	type nameSearch struct {
 		firstName string
 		lastName  string
@@ -450,146 +417,13 @@ func (r *Repository) searchCustomers(ctx context.Context, filters bson.M, p *com
 
 }
 
-func (repo *Repository) setup(ctx context.Context) error {
-	repo.customers.Indexes().DropOne(ctx, "customer.lastName_text")
-
-	if _, err := repo.locks.Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys: bson.D{
-			{Key: "id", Value: 1},
-		},
-		Options: options.Index().SetUnique(true),
-	}); err != nil {
-		return err
-	}
-
-	if _, err := repo.customers.Indexes().CreateMany(ctx, []mongo.IndexModel{
-		{
-			Keys: bson.D{
-				{
-					Key:   "customer.lastName",
-					Value: "text",
-				},
-				{
-					Key:   "customer.firstName",
-					Value: "text",
-				},
-			},
-			Options: options.Index().SetSparse(true),
-		},
-		{
-			Keys: bson.D{
-				{
-					Key:   "customer.emailAddresses",
-					Value: 1,
-				},
-			},
-			Options: options.Index().SetSparse(true),
-		},
-		{
-			Keys: bson.D{
-				{
-					Key:   "customer.phoneNumbers",
-					Value: 1,
-				},
-			},
-			Options: options.Index().SetSparse(true),
-		},
-		{
-			Keys: bson.D{
-				{
-					Key:   "states.importer",
-					Value: 1,
-				},
-				{
-					Key:   "states.internalReference",
-					Value: 1,
-				},
-			},
-			Options: options.Index().SetUnique(true).SetSparse(true),
-		},
-	}); err != nil {
-		return fmt.Errorf("failed to create customer indices: %w", err)
-	}
-
-	return nil
-}
-
-func (repo *Repository) bsonToCustomer(document bson.M) (*customerv1.CustomerResponse, error) {
-	json, err := bson.MarshalExtJSON(document, true, false)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal BSON as JSON: %w", err)
-	}
-
-	unmarshaler := protojson.UnmarshalOptions{
-		DiscardUnknown: true,
-	}
-
-	var customer = new(customerv1.CustomerResponse)
-	if err := unmarshaler.Unmarshal(json, customer); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal JSON to protobuf message: %w", err)
-	}
-
-	switch v := document["_id"].(type) {
-	case string:
-		customer.Customer.Id = v
-	case primitive.ObjectID:
-		customer.Customer.Id = v.Hex()
-
-	default:
-		return customer, fmt.Errorf("invalid or unsupported document _id type: %T", v)
-	}
-
-	return customer, nil
-}
-
-func (repo *Repository) customerToBSON(customer *customerv1.CustomerResponse) (bson.M, error) {
-	opts := protojson.MarshalOptions{
-		Multiline: true,
-		Indent:    "  ",
-	}
-
-	blob, err := opts.Marshal(customer)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert proto.Message to JSON: %w", err)
-	}
-
-	vr, err := bsonrw.NewExtJSONValueReader(bytes.NewReader(blob), true)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create ext. JSON reader: %w", err)
-	}
-	dec, err := bson.NewDecoder(vr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create BSON decoder: %w", err)
-	}
-	dec.DefaultDocumentM()
-
-	var m bson.M
-	if err := dec.Decode(&m); err != nil {
-		return nil, fmt.Errorf("failed to decode extended JSON to BSON: %w", err)
-	}
-
-	if customer.Customer.Id != "" {
-		var err error
-
-		m["_id"], err = primitive.ObjectIDFromHex(customer.Customer.Id)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse document id: %w", err)
-		}
-	}
-
-	return m, nil
-}
-
-// Compile-time check
-var _ repo.Backend = (*Repository)(nil)
-
 func convertErr(err error) error {
 	if err == nil {
 		return nil
 	}
 
 	if errors.Is(err, mongo.ErrNoDocuments) {
-		return repo.ErrCustomerNotFound
+		return repo.ErrNotFound
 	}
 
 	return err

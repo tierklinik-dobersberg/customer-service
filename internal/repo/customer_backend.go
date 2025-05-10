@@ -14,7 +14,7 @@ func Clone[T proto.Message](a T) T {
 	return proto.Clone(a).(T)
 }
 
-type Backend interface {
+type CustomerBackend interface {
 	// StoreCustomer upserts a customer record into the database.
 	StoreCustomer(ctx context.Context, customer *customerv1.Customer, states []*customerv1.ImportState) error
 
@@ -33,40 +33,41 @@ type Backend interface {
 	LookupCustomerByMail(ctx context.Context, mail string, pagination *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error)
 }
 
-type Repo interface {
-	Backend
-	SingleQueryRunnger
-	MultiQueryRunner
+type CustomerRepository interface {
+	CustomerBackend
+
+	SingleCustomerQueryRunnger
+	MultiCustomerQueryRunner
 }
 
-type SingleQueryRunnger interface {
-	SearchQuery(ctx context.Context, query *customerv1.CustomerQuery, p *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error)
+type SingleCustomerQueryRunnger interface {
+	PerformCustomerQuery(ctx context.Context, query *customerv1.CustomerQuery, p *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error)
 }
 
-type MultiQueryRunner interface {
-	SearchQueries(ctx context.Context, queries []*customerv1.CustomerQuery, p *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error)
+type MultiCustomerQueryRunner interface {
+	PerformCustomerQueries(ctx context.Context, queries []*customerv1.CustomerQuery, p *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error)
 }
 
 type repo struct {
-	Backend
+	CustomerBackend
 }
 
-func New(backend Backend) Repo {
+func New(backend CustomerBackend) CustomerRepository {
 	return &repo{
-		Backend: backend,
+		CustomerBackend: backend,
 	}
 }
 
-func (r *repo) SearchQueries(ctx context.Context, queries []*customerv1.CustomerQuery, p *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error) {
-	if cap, ok := r.Backend.(MultiQueryRunner); ok {
-		return cap.SearchQueries(ctx, queries, p)
+func (r *repo) PerformCustomerQueries(ctx context.Context, queries []*customerv1.CustomerQuery, p *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error) {
+	if cap, ok := r.CustomerBackend.(MultiCustomerQueryRunner); ok {
+		return cap.PerformCustomerQueries(ctx, queries, p)
 	}
 
 	// fallback to execute each query on it's own and apply pagination afterwards.
 	// sorting does not correctly work in this situation
 	var results []*customerv1.CustomerResponse
 	for _, q := range queries {
-		res, _, err := r.SearchQuery(ctx, q, nil) // skip pagination here
+		res, _, err := r.PerformCustomerQuery(ctx, q, nil) // skip pagination here
 		if err != nil {
 			return nil, 0, err
 		}
@@ -92,22 +93,22 @@ func (r *repo) SearchQueries(ctx context.Context, queries []*customerv1.Customer
 	return cleanedResult, len(cleanedResult), nil
 }
 
-func (r *repo) SearchQuery(ctx context.Context, query *customerv1.CustomerQuery, p *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error) {
-	if cap, ok := r.Backend.(SingleQueryRunnger); ok {
-		return cap.SearchQuery(ctx, query, p)
+func (r *repo) PerformCustomerQuery(ctx context.Context, query *customerv1.CustomerQuery, p *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error) {
+	if cap, ok := r.CustomerBackend.(SingleCustomerQueryRunnger); ok {
+		return cap.PerformCustomerQuery(ctx, query, p)
 	}
 
 	var customers []*customerv1.CustomerResponse
 	var count int
 
 	if query == nil || query.Query == nil {
-		return r.Backend.ListCustomers(ctx, p)
+		return r.CustomerBackend.ListCustomers(ctx, p)
 	}
 
 	switch v := query.Query.(type) {
 	case *customerv1.CustomerQuery_Id:
 		c, states, err := r.LookupCustomerById(ctx, v.Id)
-		if err != nil && !errors.Is(err, ErrCustomerNotFound) {
+		if err != nil && !errors.Is(err, ErrNotFound) {
 			return nil, 0, err
 		}
 
@@ -120,7 +121,7 @@ func (r *repo) SearchQuery(ctx context.Context, query *customerv1.CustomerQuery,
 
 	case *customerv1.CustomerQuery_InternalReference:
 		c, states, err := r.LookupCustomerByRef(ctx, v.InternalReference.Importer, v.InternalReference.Ref)
-		if err != nil && !errors.Is(err, ErrCustomerNotFound) {
+		if err != nil && !errors.Is(err, ErrNotFound) {
 			return nil, 0, err
 		}
 
@@ -133,7 +134,7 @@ func (r *repo) SearchQuery(ctx context.Context, query *customerv1.CustomerQuery,
 
 	case *customerv1.CustomerQuery_Name:
 		results, c, err := r.LookupCustomerByName(ctx, v.Name.LastName, p)
-		if err != nil && !errors.Is(err, ErrCustomerNotFound) {
+		if err != nil && !errors.Is(err, ErrNotFound) {
 			return nil, 0, err
 		}
 

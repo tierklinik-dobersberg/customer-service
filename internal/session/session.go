@@ -16,12 +16,13 @@ import (
 type ImportStream = connect.BidiStream[customerv1.ImportSessionRequest, customerv1.ImportSessionResponse]
 
 type ImportSession struct {
-	stream   *ImportStream
-	store    repo.Repo
-	wg       sync.WaitGroup
-	importer string
-	resolver PriorityResolver
-	country string
+	stream             *ImportStream
+	customerRepository repo.CustomerRepository
+	patientRepository  repo.PatientBackend
+	wg                 sync.WaitGroup
+	importer           string
+	resolver           PriorityResolver
+	country            string
 
 	sendQueue chan *customerv1.ImportSessionResponse
 
@@ -30,13 +31,14 @@ type ImportSession struct {
 	lookups          atomic.Uint64
 }
 
-func NewImportSession(country string, stream *ImportStream, store repo.Repo, resolver PriorityResolver) *ImportSession {
+func NewImportSession(country string, stream *ImportStream, customerRepo repo.CustomerRepository, patientRepo repo.PatientBackend, resolver PriorityResolver) *ImportSession {
 	return &ImportSession{
-		resolver:  resolver,
-		stream:    stream,
-		country: country,
-		store:     store,
-		sendQueue: make(chan *customerv1.ImportSessionResponse, 100),
+		resolver:           resolver,
+		stream:             stream,
+		country:            country,
+		customerRepository: customerRepo,
+		patientRepository:  patientRepo,
+		sendQueue:          make(chan *customerv1.ImportSessionResponse, 100),
 	}
 }
 
@@ -82,7 +84,6 @@ func (session *ImportSession) Handle(ctx context.Context) error {
 		}
 
 		if _, ok := msg.Message.(*customerv1.ImportSessionRequest_Complete); ok {
-
 			break
 		}
 
@@ -106,7 +107,12 @@ func (session *ImportSession) handleMessage(ctx context.Context, msg *customerv1
 		session.handleCustomerLookup(ctx, msg.CorrelationId, v)
 
 	case *customerv1.ImportSessionRequest_UpsertCustomer:
-		if err := session.handleUpsert(ctx, msg.CorrelationId, v); err != nil {
+		if err := session.handleCustomerUpsert(ctx, msg.CorrelationId, v); err != nil {
+			session.sendError(ctx, msg.CorrelationId, err)
+		}
+
+	case *customerv1.ImportSessionRequest_UpsertPatient:
+		if err := session.handlePatientUpsert(ctx, msg.CorrelationId, v); err != nil {
 			session.sendError(ctx, msg.CorrelationId, err)
 		}
 
@@ -139,8 +145,8 @@ func (session *ImportSession) handleCustomerLookup(ctx context.Context, correlat
 		v.Importer = session.importer
 	}
 
-	results, _, err := session.store.SearchQuery(ctx, msg.LookupCustomer.Query, nil)
-	if err != nil && !errors.Is(err, repo.ErrCustomerNotFound) {
+	results, _, err := session.customerRepository.PerformCustomerQuery(ctx, msg.LookupCustomer.Query, nil)
+	if err != nil && !errors.Is(err, repo.ErrNotFound) {
 		slog.ErrorContext(ctx, "failed to search customers", slog.Any("error", err.Error()))
 	}
 
@@ -168,7 +174,7 @@ func (session *ImportSession) handleCustomerLookup(ctx context.Context, correlat
 	}
 }
 
-func (session *ImportSession) handleUpsert(ctx context.Context, correlationId string, msg *customerv1.ImportSessionRequest_UpsertCustomer) error {
+func (session *ImportSession) handleCustomerUpsert(ctx context.Context, correlationId string, msg *customerv1.ImportSessionRequest_UpsertCustomer) error {
 	var (
 		customer *customerv1.Customer
 		states   []*customerv1.ImportState
@@ -176,8 +182,8 @@ func (session *ImportSession) handleUpsert(ctx context.Context, correlationId st
 	)
 
 	if msg.UpsertCustomer.InternalReference != "" {
-		customer, states, err = session.store.LookupCustomerByRef(ctx, session.importer, msg.UpsertCustomer.InternalReference)
-		if err != nil && !errors.Is(err, repo.ErrCustomerNotFound) {
+		customer, states, err = session.customerRepository.LookupCustomerByRef(ctx, session.importer, msg.UpsertCustomer.InternalReference)
+		if err != nil && !errors.Is(err, repo.ErrNotFound) {
 			return err
 		}
 	}
@@ -185,7 +191,7 @@ func (session *ImportSession) handleUpsert(ctx context.Context, correlationId st
 	// try to find by phone number
 	if customer == nil {
 		for _, phone := range msg.UpsertCustomer.Customer.PhoneNumbers {
-			res, _, err := session.store.LookupCustomerByPhone(ctx, phone, nil)
+			res, _, err := session.customerRepository.LookupCustomerByPhone(ctx, phone, nil)
 			if err != nil {
 				return err
 			}
@@ -193,14 +199,13 @@ func (session *ImportSession) handleUpsert(ctx context.Context, correlationId st
 			if len(res) == 1 {
 				customer = res[0].Customer
 				states = res[0].States
+				break
 			}
-
-			break
 		}
 	}
 
 	if customer != nil && customer.Id != "" {
-		unlock, err := session.store.LockCustomer(ctx, customer.Id)
+		unlock, err := session.customerRepository.LockCustomer(ctx, customer.Id)
 		if err != nil {
 			return err
 		}
@@ -208,21 +213,21 @@ func (session *ImportSession) handleUpsert(ctx context.Context, correlationId st
 		defer unlock()
 	}
 
-	p := NewPatcher(session.importer, msg.UpsertCustomer.InternalReference, session.country, session.resolver, customer, states)
+	p := NewCustomerPatcher(session.importer, msg.UpsertCustomer.InternalReference, session.country, session.resolver, customer, states)
 
 	if err := p.Apply(msg.UpsertCustomer.GetCustomer()); err != nil {
 		return fmt.Errorf("failed to apply updates: %w", err)
 	}
 
-	if err := session.store.StoreCustomer(ctx, p.Result, p.States); err != nil {
+	if err := session.customerRepository.StoreCustomer(ctx, p.Result, p.States); err != nil {
 		return fmt.Errorf("failed to store customer: %w", err)
 	}
 
 	select {
 	case session.sendQueue <- &customerv1.ImportSessionResponse{
 		CorrelationId: correlationId,
-		Message: &customerv1.ImportSessionResponse_UpsertSuccess{
-			UpsertSuccess: &customerv1.UpsertCustomerSuccess{
+		Message: &customerv1.ImportSessionResponse_UpsertCustomerSuccess{
+			UpsertCustomerSuccess: &customerv1.UpsertCustomerSuccess{
 				Id: p.Result.Id,
 			},
 		},
@@ -264,4 +269,55 @@ func (session *ImportSession) sendLoop(ctx context.Context) {
 			return
 		}
 	}
+}
+
+func (session *ImportSession) handlePatientUpsert(ctx context.Context, correlationId string, msg *customerv1.ImportSessionRequest_UpsertPatient) error {
+	var (
+		patient *customerv1.Patient
+		err     error
+	)
+
+	ref := msg.UpsertPatient.GetPatient().GetInternalRefernce()
+	if ref == "" {
+		return fmt.Errorf("missing internal patient reference")
+	}
+
+	if msg.UpsertPatient.GetPatient().GetCustomerId() == "" {
+		return fmt.Errorf("missing customer id reference")
+	}
+
+	patient, err = session.patientRepository.LookupPatientByRef(ctx, session.importer, ref)
+	if err != nil && !errors.Is(err, repo.ErrNotFound) {
+		return err
+	}
+
+	if patient != nil && patient.PatientId != "" {
+		unlock, err := session.patientRepository.LockPatient(ctx, patient.PatientId)
+		if err != nil {
+			return err
+		}
+
+		defer unlock()
+	}
+
+	patient.Importer = session.importer
+
+	storedPatient, err := session.patientRepository.StorePatient(ctx, patient)
+	if err != nil {
+		return fmt.Errorf("failed to store customer: %w", err)
+	}
+
+	select {
+	case session.sendQueue <- &customerv1.ImportSessionResponse{
+		CorrelationId: correlationId,
+		Message: &customerv1.ImportSessionResponse_UpsertPatientSuccess{
+			UpsertPatientSuccess: &customerv1.UpsertPatientSuccess{
+				Id: storedPatient.PatientId,
+			},
+		},
+	}:
+	case <-ctx.Done():
+	}
+
+	return nil
 }

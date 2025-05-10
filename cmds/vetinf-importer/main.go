@@ -52,9 +52,10 @@ func execute(root *cli.Root, args []string) {
 
 	cli := root.CustomerImport()
 
-	stream, _, err := exporter.ExportCustomers(context.Background())
+	customerStream, _, err := exporter.ExportCustomers(context.Background())
 	if err != nil {
-		logrus.Fatalf("failed to create vetinf exporter: %s", err)
+		logrus.Errorf("failed to create vetinf exporter: %s", err)
+		return
 	}
 
 	importStream := cli.ImportSession(context.Background())
@@ -63,8 +64,9 @@ func execute(root *cli.Root, args []string) {
 	if err != nil {
 		logrus.Fatalf("failed to create import manager: %s", err)
 	}
+	defer session.Stop()
 
-	for customer := range stream {
+	for customer := range customerStream {
 		if customer.Deleted {
 			// TODO(ppacher)
 			logrus.Infof("vetinf: skipping deleted customer %s (%s %s)", customer.InternalRef, customer.LastName, customer.FirstName)
@@ -78,5 +80,21 @@ func execute(root *cli.Root, args []string) {
 		}
 	}
 
-	session.Stop()
+	patientStream, _, err := exporter.ExportPatients(context.Background())
+	if err != nil {
+		logrus.Errorf("failed to export customers: %s", err)
+		return
+	}
+
+	for patient := range patientStream {
+		if patient.Deleted {
+			logrus.Infof("vetinf: skipping deleted patient %s (%s %s)", patient.InternalRef, patient.PatientName, patient.InternalCustomerRef)
+			continue
+		}
+
+		logrus.Infof("vetinf: upserting patient %s (%s %s)", patient.InternalRef, patient.PatientName, patient.InternalCustomerRef)
+		if err := session.UpsertPatient(patient.InternalCustomerRef, patient.Patient); err != nil {
+			logrus.Errorf("failed to upsert patient: %s", err)
+		}
+	}
 }

@@ -14,7 +14,7 @@ type PriorityResolver interface {
 	IsAllowed(newImporter string, existingImporters []string) bool
 }
 
-type Patcher struct {
+type CustomerPatcher struct {
 	Importer string
 	Ref      string
 
@@ -28,7 +28,7 @@ type Patcher struct {
 	currentState *customerv1.ImportState
 }
 
-func NewPatcher(importer, ref, country string, resolver PriorityResolver, existing *customerv1.Customer, states []*customerv1.ImportState) *Patcher {
+func NewCustomerPatcher(importer, ref, country string, resolver PriorityResolver, existing *customerv1.Customer, states []*customerv1.ImportState) *CustomerPatcher {
 	if existing == nil {
 		existing = new(customerv1.Customer)
 	}
@@ -43,7 +43,7 @@ func NewPatcher(importer, ref, country string, resolver PriorityResolver, existi
 	// now, find the importer state (or create a new one)
 	statesCopy, currentState := findImporterState(importer, ref, states)
 
-	p := &Patcher{
+	p := &CustomerPatcher{
 		Existing:     existing,
 		Result:       result,
 		States:       statesCopy,
@@ -57,11 +57,11 @@ func NewPatcher(importer, ref, country string, resolver PriorityResolver, existi
 	return p
 }
 
-func (p *Patcher) canSet(owners []string) bool {
+func (p *CustomerPatcher) canSet(owners []string) bool {
 	return p.resolver.IsAllowed(p.Importer, owners)
 }
 
-func (p *Patcher) Apply(importedCustomer *customerv1.Customer) error {
+func (p *CustomerPatcher) Apply(importedCustomer *customerv1.Customer) error {
 	if err := p.applyFirstName(importedCustomer); err != nil {
 		return fmt.Errorf("first_name: %w", err)
 	}
@@ -119,7 +119,7 @@ func (p *Patcher) Apply(importedCustomer *customerv1.Customer) error {
 	return nil
 }
 
-func (p *Patcher) cleanResult() error {
+func (p *CustomerPatcher) cleanResult() error {
 	if p.Result.FirstName != "" {
 		owned := &customerv1.OwnedAttribute{
 			Kind: &customerv1.OwnedAttribute_FirstName{
@@ -214,7 +214,7 @@ func (p *Patcher) cleanResult() error {
 	return nil
 }
 
-func (p *Patcher) pruneAttributes(importedCustomer *customerv1.Customer) error {
+func (p *CustomerPatcher) pruneAttributes(importedCustomer *customerv1.Customer) error {
 	var newList []*customerv1.OwnedAttribute
 
 	for _, existingOwnedAttr := range p.currentState.OwnedAttributes {
@@ -267,7 +267,7 @@ func (p *Patcher) pruneAttributes(importedCustomer *customerv1.Customer) error {
 	return nil
 }
 
-func (p *Patcher) applyFirstName(importedCustomer *customerv1.Customer) error {
+func (p *CustomerPatcher) applyFirstName(importedCustomer *customerv1.Customer) error {
 	if importedCustomer.FirstName != "" {
 		owned := &customerv1.OwnedAttribute{
 			Kind: &customerv1.OwnedAttribute_FirstName{
@@ -292,7 +292,7 @@ func (p *Patcher) applyFirstName(importedCustomer *customerv1.Customer) error {
 	return nil
 }
 
-func (p *Patcher) applyLastName(importedCustomer *customerv1.Customer) error {
+func (p *CustomerPatcher) applyLastName(importedCustomer *customerv1.Customer) error {
 	if importedCustomer.LastName != "" {
 		owned := &customerv1.OwnedAttribute{
 			Kind: &customerv1.OwnedAttribute_LastName{
@@ -317,7 +317,7 @@ func (p *Patcher) applyLastName(importedCustomer *customerv1.Customer) error {
 	return nil
 }
 
-func (p *Patcher) applyAddressList(importedCustomer *customerv1.Customer) error {
+func (p *CustomerPatcher) applyAddressList(importedCustomer *customerv1.Customer) error {
 	for _, value := range importedCustomer.Addresses {
 		owned := &customerv1.OwnedAttribute{
 			Kind: &customerv1.OwnedAttribute_Address{
@@ -342,7 +342,7 @@ func (p *Patcher) applyAddressList(importedCustomer *customerv1.Customer) error 
 	return nil
 }
 
-func (p *Patcher) applyStringList(resultList *[]string, importedList []string, factory func(value string) *customerv1.OwnedAttribute) error {
+func (p *CustomerPatcher) applyStringList(resultList *[]string, importedList []string, factory func(value string) *customerv1.OwnedAttribute) error {
 	for _, value := range importedList {
 		owned := factory(value)
 
@@ -385,7 +385,7 @@ func findImporterState(importer, ref string, states []*customerv1.ImportState) (
 	return states, state
 }
 
-func (p *Patcher) FindAttributeOwners(owned *customerv1.OwnedAttribute) ([]string, bool, error) {
+func (p *CustomerPatcher) FindAttributeOwners(owned *customerv1.OwnedAttribute) ([]string, bool, error) {
 	var (
 		owners []string
 		exists bool

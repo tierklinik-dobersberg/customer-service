@@ -33,7 +33,7 @@ func (r *Repository) LockCustomer(ctx context.Context, id string) (func(), error
 	defer r.l.Unlock()
 
 	if _, ok := r.locks[id]; ok {
-		return func() {}, repo.ErrCustomerLocked
+		return func() {}, repo.ErrRecordLocked
 	}
 
 	lockId := importer.GenerateCorrelationId(32)
@@ -84,7 +84,7 @@ func (r *Repository) LookupCustomerByRef(ctx context.Context, importer string, i
 	}
 
 	if existingCustomer == nil {
-		return nil, nil, repo.ErrCustomerNotFound
+		return nil, nil, repo.ErrNotFound
 	}
 
 	customerClone := repo.Clone(existingCustomer)
@@ -98,7 +98,7 @@ func (r *Repository) LookupCustomerById(ctx context.Context, id string) (*custom
 
 	customer, ok := r.customers[id]
 	if !ok {
-		return nil, nil, repo.ErrCustomerNotFound
+		return nil, nil, repo.ErrNotFound
 	}
 
 	customerClone := repo.Clone(customer)
@@ -191,4 +191,4 @@ func (r *Repository) ListCustomers(_ context.Context, _ *commonv1.Pagination) ([
 	return results, len(results), nil
 }
 
-var _ repo.Backend = (*Repository)(nil)
+var _ repo.CustomerBackend = (*Repository)(nil)

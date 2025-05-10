@@ -151,7 +151,7 @@ func (mng *Dispatcher) receiveLoop(ctx context.Context) {
 		switch v := res.Message.(type) {
 		case *customerv1.ImportSessionResponse_StartSession:
 		case *customerv1.ImportSessionResponse_Error:
-		case *customerv1.ImportSessionResponse_UpsertSuccess:
+		case *customerv1.ImportSessionResponse_UpsertCustomerSuccess:
 		case *customerv1.ImportSessionResponse_LookupCustomer:
 
 		default:
