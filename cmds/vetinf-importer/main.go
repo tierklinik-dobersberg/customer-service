@@ -6,6 +6,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/tierklinik-dobersberg/apis/pkg/cli"
+	"github.com/tierklinik-dobersberg/apis/pkg/h2utils"
 	"github.com/tierklinik-dobersberg/customer-service/pkg/importer"
 )
 
@@ -50,13 +51,9 @@ func execute(root *cli.Root, args []string) {
 
 	logrus.Infof("connecting to %s", root.Config().BaseURLS.CustomerService)
 
-	cli := root.CustomerImport()
+	root.HttpClient = h2utils.NewInsecureHttp2Client()
 
-	customerStream, _, err := exporter.ExportCustomers(context.Background())
-	if err != nil {
-		logrus.Errorf("failed to create vetinf exporter: %s", err)
-		return
-	}
+	cli := root.CustomerImport()
 
 	importStream := cli.ImportSession(context.Background())
 
@@ -66,19 +63,26 @@ func execute(root *cli.Root, args []string) {
 	}
 	defer session.Stop()
 
-	for customer := range customerStream {
-		if customer.Deleted {
-			// TODO(ppacher)
-			logrus.Infof("vetinf: skipping deleted customer %s (%s %s)", customer.InternalRef, customer.LastName, customer.FirstName)
-			continue
+	/*
+		customerStream, _, err := exporter.ExportCustomers(context.Background())
+		if err != nil {
+			logrus.Errorf("failed to create vetinf exporter: %s", err)
+			return
 		}
+		for customer := range customerStream {
+			if customer.Deleted {
+				// TODO(ppacher)
+				logrus.Infof("vetinf: skipping deleted customer %s (%s %s)", customer.InternalRef, customer.LastName, customer.FirstName)
+				continue
+			}
 
-		logrus.Infof("vetinf: upserting customer %s (%s %s)", customer.InternalRef, customer.LastName, customer.FirstName)
+			logrus.Infof("vetinf: upserting customer %s (%s %s)", customer.InternalRef, customer.LastName, customer.FirstName)
 
-		if err := session.UpsertCustomerByRef(customer.InternalRef, customer.Customer, nil); err != nil {
-			logrus.Errorf("failed to upsert customer: %s", err)
+			if err := session.UpsertCustomerByRef(customer.InternalRef, customer.Customer, nil); err != nil {
+				logrus.Errorf("failed to upsert customer: %s", err)
+			}
 		}
-	}
+	*/
 
 	patientStream, _, err := exporter.ExportPatients(context.Background())
 	if err != nil {

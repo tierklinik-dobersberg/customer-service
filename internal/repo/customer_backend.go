@@ -35,6 +35,7 @@ type CustomerBackend interface {
 
 type CustomerRepository interface {
 	CustomerBackend
+	PatientBackend
 
 	SingleCustomerQueryRunnger
 	MultiCustomerQueryRunner
@@ -50,11 +51,13 @@ type MultiCustomerQueryRunner interface {
 
 type repo struct {
 	CustomerBackend
+	PatientBackend
 }
 
-func New(backend CustomerBackend) CustomerRepository {
+func New(backend CustomerBackend, p PatientBackend) CustomerRepository {
 	return &repo{
 		CustomerBackend: backend,
+		PatientBackend:  p,
 	}
 }
 

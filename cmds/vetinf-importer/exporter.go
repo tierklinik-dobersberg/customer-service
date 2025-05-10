@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/nyaruka/phonenumbers"
 	"github.com/sirupsen/logrus"
@@ -230,10 +231,29 @@ func (e *Exporter) ExportPatients(ctx context.Context) (<-chan *ExportedPatient,
 				continue
 			}
 
-			bday, err := commonv1.ParseDate(p.Birthday)
-			if err != nil {
-				logrus.Infof("vetinf: failed to parse animal birthday %q: %w", p.Birthday, err)
-				continue
+			var bday *commonv1.Date
+			if p.Birthday != "" {
+				formats := []string{
+					"02.01.2006",
+					"2.1.2006",
+					"02.1.2006",
+					"2.01.2006",
+					"01.2006",
+					"1.2006",
+					"2006",
+				}
+
+				for _, f := range formats {
+					t, err := time.ParseInLocation(f, p.Birthday, time.Local)
+					if err == nil {
+						bday = commonv1.FromTime(t)
+						break
+					}
+				}
+
+				if bday == nil {
+					logrus.Errorf("failed to parse birthday: %q", p.Birthday)
+				}
 			}
 
 			var gender customerv1.PatientGender

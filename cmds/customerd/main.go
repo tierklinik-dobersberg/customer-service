@@ -21,7 +21,6 @@ import (
 	"github.com/tierklinik-dobersberg/apis/pkg/validator"
 	"github.com/tierklinik-dobersberg/customer-service/internal/config"
 	"github.com/tierklinik-dobersberg/customer-service/internal/repo"
-	"github.com/tierklinik-dobersberg/customer-service/internal/repo/inmem"
 	"github.com/tierklinik-dobersberg/customer-service/internal/repo/mongo"
 	"github.com/tierklinik-dobersberg/customer-service/internal/services/customerservice"
 	"github.com/tierklinik-dobersberg/customer-service/internal/services/importservice"
@@ -97,7 +96,7 @@ func main() {
 	// Prepare our servemux and add handlers.
 	serveMux := http.NewServeMux()
 
-	var backend repo.CustomerBackend
+	var backend *mongo.Repository
 
 	if cfg.MongoDBURL != "" {
 		var err error
@@ -107,12 +106,12 @@ func main() {
 			logrus.Fatalf("failed to create repository: %s", err)
 		}
 	} else {
-		logrus.Warn("using in-memory database, data will not be persisted accross restarts")
+		logrus.Fatalf("using in-memory database, data will not be persisted accross restarts")
 
-		backend = inmem.New()
+		//backend = inmem.New()
 	}
 
-	customerRepository := repo.New(backend)
+	customerRepository := repo.New(backend, backend)
 
 	resolver := resolver{
 		"user":    2,
