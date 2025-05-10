@@ -89,7 +89,7 @@ func (repo *Repository) bsonToPatient(document bson.M) (*customerv1.Patient, err
 
 	var patient = new(customerv1.Patient)
 	if err := unmarshaler.Unmarshal(json, patient); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal JSON to protobuf message: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal JSON to protobuf message: %w (blob: %s)", err, string(json))
 	}
 
 	switch v := document["_id"].(type) {
