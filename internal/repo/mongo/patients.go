@@ -6,7 +6,9 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/hashicorp/go-multierror"
 	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
+	"github.com/tierklinik-dobersberg/apis/pkg/ql/bsonql"
 	"github.com/tierklinik-dobersberg/customer-service/internal/repo"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -15,7 +17,11 @@ import (
 )
 
 func (r *Repository) StorePatient(ctx context.Context, p *customerv1.Patient) (*customerv1.Patient, error) {
-	document, err := r.patientToBSON(p)
+
+	document, err := PatientFromProto(p)
+	if err != nil {
+		return nil, fmt.Errorf("invalid patient: %w", err)
+	}
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare BSON document: %w", err)
@@ -24,12 +30,7 @@ func (r *Repository) StorePatient(ctx context.Context, p *customerv1.Patient) (*
 	res := proto.Clone(p).(*customerv1.Patient)
 
 	if id := p.PatientId; id != "" {
-		oid, err := primitive.ObjectIDFromHex(id)
-		if err != nil {
-			return nil, fmt.Errorf("invalid patient id %q: %w", id, err)
-		}
-
-		res, err := r.patients.ReplaceOne(ctx, bson.M{"_id": oid}, document)
+		res, err := r.patients.ReplaceOne(ctx, bson.M{"_id": document.PatientId}, document)
 		if err != nil {
 			return nil, fmt.Errorf("failed to replace patient %q: %w", id, err)
 		}
@@ -39,19 +40,52 @@ func (r *Repository) StorePatient(ctx context.Context, p *customerv1.Patient) (*
 		}
 
 	} else {
-		insertResult, err := r.patients.InsertOne(ctx, document)
+		document.PatientId = primitive.NewObjectID()
+
+		_, err := r.patients.InsertOne(ctx, document)
 		if err != nil {
 			return nil, fmt.Errorf("failed to insert patient: %w", err)
 		}
 
-		res.PatientId = insertResult.InsertedID.(primitive.ObjectID).Hex()
+		res.PatientId = document.PatientId.Hex()
 	}
 
 	return res, nil
 }
 
-func (r *Repository) QueryPatients(context.Context, string) ([]*customerv1.Patient, error) {
-	return nil, nil
+func (r *Repository) QueryPatients(ctx context.Context, query string) ([]*customerv1.Patient, error) {
+	p := &bsonql.BSONQL{
+		Schema: PatientSchema,
+	}
+
+	filter, err := p.Parse(query)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := r.patients.Find(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search for patients: %w", err)
+	}
+
+	var result []Patient
+	if err := res.All(ctx, &result); err != nil {
+		return nil, fmt.Errorf("failed to decode patient records: %w", err)
+	}
+
+	var merr = new(multierror.Error)
+	pbResult := make([]*customerv1.Patient, 0, len(result))
+	for _, p := range result {
+		pb, err := p.ToProto()
+		if err != nil {
+			merr.Errors = append(merr.Errors, err)
+			continue
+		}
+
+		pbResult = append(pbResult, pb)
+	}
+
+	return pbResult, merr.ErrorOrNil()
 }
 
 func (r *Repository) LookupPatientById(ctx context.Context, id string) (*customerv1.Patient, error) {
@@ -65,17 +99,12 @@ func (r *Repository) LookupPatientById(ctx context.Context, id string) (*custome
 		return nil, convertErr(res.Err())
 	}
 
-	var m bson.M
+	var m Patient
 	if err := res.Decode(&m); err != nil {
 		return nil, err
 	}
 
-	patient, err := r.bsonToPatient(m)
-	if err != nil {
-		return nil, err
-	}
-
-	return patient, nil
+	return m.ToProto()
 }
 
 func (r *Repository) LookupPatientByRef(ctx context.Context, importer, ref string) (*customerv1.Patient, error) {
@@ -91,17 +120,12 @@ func (r *Repository) LookupPatientByRef(ctx context.Context, importer, ref strin
 		return nil, convertErr(res.Err())
 	}
 
-	var m bson.M
+	var m Patient
 	if err := res.Decode(&m); err != nil {
 		return nil, err
 	}
 
-	patient, err := r.bsonToPatient(m)
-	if err != nil {
-		return nil, err
-	}
-
-	return patient, nil
+	return m.ToProto()
 }
 
 func (r *Repository) LockPatient(ctx context.Context, id string) (func(), error) {
