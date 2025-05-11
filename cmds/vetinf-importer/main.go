@@ -92,7 +92,7 @@ func execute(root *cli.Root, args []string) {
 
 	for patient := range patientStream {
 		if patient.Deleted {
-			logrus.Infof("vetinf: skipping deleted patient %s (%s %s)", patient.InternalRef, patient.PatientName, patient.InternalCustomerRef)
+			logrus.Infof("vetinf: skipping deleted patient %s (%s %s)", patient.InternalReference, patient.PatientName, patient.InternalCustomerRef)
 			continue
 		}
 

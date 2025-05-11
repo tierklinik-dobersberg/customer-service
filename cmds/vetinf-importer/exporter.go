@@ -29,7 +29,6 @@ type ExportedCustomer struct {
 type ExportedPatient struct {
 	*customerv1.Patient
 	Deleted             bool
-	InternalRef         string
 	InternalCustomerRef string
 }
 
@@ -317,7 +316,6 @@ func (e *Exporter) ExportPatients(ctx context.Context) (<-chan *ExportedPatient,
 
 			dbPatient := &ExportedPatient{
 				Deleted:             p.Meta.Deleted,
-				InternalRef:         p.AnimalID,
 				InternalCustomerRef: fmt.Sprintf("%d", p.CustomerID),
 				Patient: &customerv1.Patient{
 					PatientName:       p.Name,
@@ -329,7 +327,7 @@ func (e *Exporter) ExportPatients(ctx context.Context) (<-chan *ExportedPatient,
 					CustomerId:        p.ChipNumber,
 					Color:             p.Color,
 					ExtraData:         extra,
-					InternalReference: p.AnimalID,
+					InternalReference: fmt.Sprintf("customer:%d animal:%s", p.CustomerID, p.AnimalID),
 					AdditionUniqueId:  p.Extra5,
 					ChipNumber:        p.ChipNumber,
 					IsAlive:           true,

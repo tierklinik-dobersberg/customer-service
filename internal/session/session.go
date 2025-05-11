@@ -300,6 +300,13 @@ func (session *ImportSession) handlePatientUpsert(ctx context.Context, correlati
 	}
 
 	if existing != nil && existing.PatientId != "" {
+		unlock, err := session.patientRepository.LockPatient(ctx, existing.PatientId)
+		if err != nil {
+			return err
+		}
+
+		defer unlock()
+
 		record.PatientId = existing.PatientId
 		record.FirstSeen = existing.FirstSeen
 	} else {
