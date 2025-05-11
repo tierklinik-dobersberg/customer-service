@@ -233,6 +233,13 @@ func (e *Exporter) ExportPatients(ctx context.Context) (<-chan *ExportedPatient,
 
 			var bday *commonv1.Date
 			if p.Birthday != "" {
+				p.Birthday = strings.ReplaceAll(p.Birthday, "ca.", "")
+				p.Birthday = strings.ReplaceAll(p.Birthday, "ca", "")
+				p.Birthday = strings.TrimPrefix(p.Birthday, "~")
+				p.Birthday = strings.ReplaceAll(p.Birthday, "?", "")
+
+				p.Birthday = strings.TrimSpace(p.Birthday)
+
 				formats := []string{
 					"02.01.2006",
 					"2.1.2006",
@@ -240,11 +247,18 @@ func (e *Exporter) ExportPatients(ctx context.Context) (<-chan *ExportedPatient,
 					"2.01.2006",
 					"02/01/2006",
 					"2/1/2006",
+					"2.1.06",
+					"02.01.06",
 
 					"01.2006",
+					"01 2006",
+					"1 2006",
+					"1 06",
 					"1.2006",
 					"01/2006",
 					"1/2006",
+					"1/06",
+					"01/06",
 
 					"2006",
 				}
@@ -277,7 +291,6 @@ func (e *Exporter) ExportPatients(ctx context.Context) (<-chan *ExportedPatient,
 
 				default:
 					logrus.Infof("failed to get patient gender: %q", p.Gender)
-					continue
 				}
 			}
 
@@ -292,6 +305,8 @@ func (e *Exporter) ExportPatients(ctx context.Context) (<-chan *ExportedPatient,
 				"extra8":  p.Extra8,
 				"extra9":  p.Extra9,
 				"extra10": p.Extra10,
+
+				"Geburtstag": p.Birthday,
 			}
 
 			extra, err := structpb.NewStruct(additionalData)
@@ -317,7 +332,12 @@ func (e *Exporter) ExportPatients(ctx context.Context) (<-chan *ExportedPatient,
 					InternalReference: p.AnimalID,
 					AdditionUniqueId:  p.Extra5,
 					ChipNumber:        p.ChipNumber,
+					IsAlive:           true,
 				},
+			}
+
+			if p.Name == "" {
+				p.Name = "Unbekannt"
 			}
 
 			select {

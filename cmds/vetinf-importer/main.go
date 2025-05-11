@@ -96,7 +96,6 @@ func execute(root *cli.Root, args []string) {
 			continue
 		}
 
-		logrus.Infof("vetinf: upserting patient %s (%s %s)", patient.InternalRef, patient.PatientName, patient.InternalCustomerRef)
 		if err := session.UpsertPatient(patient.InternalCustomerRef, patient.Patient); err != nil {
 			logrus.Errorf("failed to upsert patient: %s", err)
 		}
