@@ -11,6 +11,8 @@ import (
 	"github.com/bufbuild/connect-go"
 	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
 	"github.com/tierklinik-dobersberg/customer-service/internal/repo"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type ImportStream = connect.BidiStream[customerv1.ImportSessionRequest, customerv1.ImportSessionResponse]
@@ -277,13 +279,19 @@ func (session *ImportSession) handlePatientUpsert(ctx context.Context, correlati
 		err      error
 	)
 
-	ref := msg.UpsertPatient.GetPatient().GetInternalReference()
+	record := proto.Clone(msg.UpsertPatient.Patient).(*customerv1.Patient)
+
+	ref := record.GetInternalReference()
 	if ref == "" {
 		return fmt.Errorf("missing internal patient reference")
 	}
 
-	if msg.UpsertPatient.GetPatient().GetCustomerId() == "" {
+	if record.GetCustomerId() == "" {
 		return fmt.Errorf("missing customer id reference")
+	}
+
+	if record.PatientName == "" {
+		return fmt.Errorf("missing patient name")
 	}
 
 	existing, err = session.patientRepository.LookupPatientByRef(ctx, session.importer, ref)
@@ -299,12 +307,16 @@ func (session *ImportSession) handlePatientUpsert(ctx context.Context, correlati
 
 		defer unlock()
 
-		msg.UpsertPatient.Patient.PatientId = existing.PatientId
+		record.PatientId = existing.PatientId
+		record.FirstSeen = existing.FirstSeen
+	} else {
+		record.FirstSeen = timestamppb.Now()
 	}
 
-	msg.UpsertPatient.Patient.Importer = session.importer
+	record.LastUpdated = timestamppb.Now()
+	record.Importer = session.importer
 
-	storedPatient, err := session.patientRepository.StorePatient(ctx, msg.UpsertPatient.Patient)
+	storedPatient, err := session.patientRepository.StorePatient(ctx, record)
 	if err != nil {
 		return fmt.Errorf("failed to store customer: %w", err)
 	}

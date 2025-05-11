@@ -95,8 +95,8 @@ func PatientFromProto(pb *customerv1.Patient) (Patient, error) {
 		AdditionalUniqueId: pb.AdditionUniqueId,
 		InternalReference:  pb.InternalReference,
 		Importer:           pb.Importer,
-		FirstSeen:          time.Now(),
-		LastUpdated:        time.Now(),
+		FirstSeen:          pb.FirstSeen.AsTime(),
+		LastUpdated:        pb.LastUpdated.AsTime(),
 		IsAlive:            pb.IsAlive,
 	}
 

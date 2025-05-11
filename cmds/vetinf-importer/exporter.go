@@ -315,6 +315,8 @@ func (e *Exporter) ExportPatients(ctx context.Context) (<-chan *ExportedPatient,
 					Color:             p.Color,
 					ExtraData:         extra,
 					InternalReference: p.AnimalID,
+					AdditionUniqueId:  p.Extra5,
+					ChipNumber:        p.ChipNumber,
 				},
 			}
 

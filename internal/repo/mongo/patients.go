@@ -17,7 +17,6 @@ import (
 )
 
 func (r *Repository) StorePatient(ctx context.Context, p *customerv1.Patient) (*customerv1.Patient, error) {
-
 	document, err := PatientFromProto(p)
 	if err != nil {
 		return nil, fmt.Errorf("invalid patient: %w", err)
