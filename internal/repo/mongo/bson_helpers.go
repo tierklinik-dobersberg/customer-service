@@ -11,34 +11,6 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
-func (repo *Repository) bsonToCustomer(document bson.M) (*customerv1.CustomerResponse, error) {
-	json, err := bson.MarshalExtJSON(document, true, false)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal BSON as JSON: %w", err)
-	}
-
-	unmarshaler := protojson.UnmarshalOptions{
-		DiscardUnknown: true,
-	}
-
-	var customer = new(customerv1.CustomerResponse)
-	if err := unmarshaler.Unmarshal(json, customer); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal JSON to protobuf message: %w", err)
-	}
-
-	switch v := document["_id"].(type) {
-	case string:
-		customer.Customer.Id = v
-	case primitive.ObjectID:
-		customer.Customer.Id = v.Hex()
-
-	default:
-		return customer, fmt.Errorf("invalid or unsupported document _id type: %T", v)
-	}
-
-	return customer, nil
-}
-
 func (repo *Repository) customerToBSON(customer *customerv1.CustomerResponse) (bson.M, error) {
 	opts := protojson.MarshalOptions{
 		Multiline: true,

@@ -15,6 +15,7 @@ import (
 	commonv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/common/v1"
 	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
 	"github.com/tierklinik-dobersberg/customer-service/internal/repo"
+	"github.com/tierklinik-dobersberg/customer-service/internal/repo/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -100,17 +101,17 @@ func (r *Repository) LookupCustomerById(ctx context.Context, id string) (*custom
 		return nil, nil, convertErr(res.Err())
 	}
 
-	var m bson.M
+	var m models.CustomerAndState
 	if err := res.Decode(&m); err != nil {
 		return nil, nil, err
 	}
 
-	customer, err := r.bsonToCustomer(m)
+	pb, err := m.ToProto()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to convert record to protobuf: %w", err)
 	}
 
-	return customer.Customer, customer.States, nil
+	return pb.Customer, pb.States, nil
 }
 
 func (r *Repository) LookupCustomerByRef(ctx context.Context, importer, ref string) (*customerv1.Customer, []*customerv1.ImportState, error) {
@@ -130,17 +131,17 @@ func (r *Repository) LookupCustomerByRef(ctx context.Context, importer, ref stri
 		return nil, nil, convertErr(res.Err())
 	}
 
-	var m bson.M
+	var m models.CustomerAndState
 	if err := res.Decode(&m); err != nil {
 		return nil, nil, err
 	}
 
-	customer, err := r.bsonToCustomer(m)
+	pb, err := m.ToProto()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to convert record to protobuf: %w", err)
 	}
 
-	return customer.Customer, customer.States, nil
+	return pb.Customer, pb.States, nil
 }
 
 func (r *Repository) LookupCustomerByName(ctx context.Context, name string, p *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error) {
@@ -372,7 +373,7 @@ func (r *Repository) searchCustomers(ctx context.Context, filters bson.M, p *com
 		Metadata []struct {
 			TotalCount int `bson:"totalCount"`
 		} `bson:"metadata"`
-		Data []bson.M
+		Data []models.CustomerAndState
 	}
 
 	if err := res.All(ctx, &result); err != nil {
@@ -394,14 +395,14 @@ func (r *Repository) searchCustomers(ctx context.Context, filters bson.M, p *com
 	)
 
 	for _, m := range result[0].Data {
-		customer, err := r.bsonToCustomer(m)
+		pb, err := m.ToProto()
 		if err != nil {
 			merr.Errors = append(merr.Errors, fmt.Errorf("failed to convert record from BSON: %w", err))
 
 			continue
 		}
 
-		results = append(results, customer)
+		results = append(results, pb)
 	}
 
 	if res.Err() != nil {
