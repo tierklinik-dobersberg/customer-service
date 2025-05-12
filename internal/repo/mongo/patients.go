@@ -10,6 +10,7 @@ import (
 	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
 	"github.com/tierklinik-dobersberg/apis/pkg/ql/bsonql"
 	"github.com/tierklinik-dobersberg/customer-service/internal/repo"
+	"github.com/tierklinik-dobersberg/customer-service/internal/repo/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -17,7 +18,7 @@ import (
 )
 
 func (r *Repository) StorePatient(ctx context.Context, p *customerv1.Patient) (*customerv1.Patient, error) {
-	document, err := PatientFromProto(p)
+	document, err := models.PatientFromProto(p)
 	if err != nil {
 		return nil, fmt.Errorf("invalid patient: %w", err)
 	}
@@ -54,7 +55,7 @@ func (r *Repository) StorePatient(ctx context.Context, p *customerv1.Patient) (*
 
 func (r *Repository) QueryPatients(ctx context.Context, query string) ([]*customerv1.Patient, error) {
 	p := &bsonql.BSONQL{
-		Schema: PatientSchema,
+		Schema: models.PatientSchema,
 	}
 
 	filter, err := p.Parse(query)
@@ -67,7 +68,7 @@ func (r *Repository) QueryPatients(ctx context.Context, query string) ([]*custom
 		return nil, fmt.Errorf("failed to search for patients: %w", err)
 	}
 
-	var result []Patient
+	var result []models.Patient
 	if err := res.All(ctx, &result); err != nil {
 		return nil, fmt.Errorf("failed to decode patient records: %w", err)
 	}
@@ -98,7 +99,7 @@ func (r *Repository) LookupPatientById(ctx context.Context, id string) (*custome
 		return nil, convertErr(res.Err())
 	}
 
-	var m Patient
+	var m models.Patient
 	if err := res.Decode(&m); err != nil {
 		return nil, err
 	}
@@ -119,7 +120,7 @@ func (r *Repository) LookupPatientByRef(ctx context.Context, importer, ref strin
 		return nil, convertErr(res.Err())
 	}
 
-	var m Patient
+	var m models.Patient
 	if err := res.Decode(&m); err != nil {
 		return nil, err
 	}

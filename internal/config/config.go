@@ -12,7 +12,7 @@ type Config struct {
 	AdminListenAddress string   `env:"ADMIN_LISTEN_ADDRESS, default=:8081"`
 	IdmURL             string   `env:"IDM_URL, required"`
 	AllowedOrigins     []string `env:"ALLOWED_ORIGINS, default=*"`
-	MongoDBURL         string   `env:"MONGO_URL"`
+	MongoDBURL         string   `env:"MONGO_URL, required"`
 	MongoDatabaseName  string   `env:"MONGO_DATABASE, default=customer-service"`
 	Country            string   `env:"COUNTRY, default=AT"`
 }

@@ -1,4 +1,4 @@
-package mongo
+package models
 
 import (
 	"fmt"

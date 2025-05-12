@@ -314,6 +314,10 @@ func (e *Exporter) ExportPatients(ctx context.Context) (<-chan *ExportedPatient,
 				continue
 			}
 
+			if p.Name == "" {
+				p.Name = "Unbekannt"
+			}
+
 			dbPatient := &ExportedPatient{
 				Deleted:             p.Meta.Deleted,
 				InternalCustomerRef: fmt.Sprintf("%d", p.CustomerID),
@@ -332,10 +336,6 @@ func (e *Exporter) ExportPatients(ctx context.Context) (<-chan *ExportedPatient,
 					ChipNumber:        p.ChipNumber,
 					IsAlive:           true,
 				},
-			}
-
-			if p.Name == "" {
-				p.Name = "Unbekannt"
 			}
 
 			select {

@@ -96,19 +96,10 @@ func main() {
 	// Prepare our servemux and add handlers.
 	serveMux := http.NewServeMux()
 
-	var backend *mongo.Repository
+	backend, err := mongo.New(ctx, cfg.MongoDBURL, cfg.MongoDatabaseName)
 
-	if cfg.MongoDBURL != "" {
-		var err error
-		backend, err = mongo.New(ctx, cfg.MongoDBURL, cfg.MongoDatabaseName)
-
-		if err != nil {
-			logrus.Fatalf("failed to create repository: %s", err)
-		}
-	} else {
-		logrus.Fatalf("using in-memory database, data will not be persisted accross restarts")
-
-		//backend = inmem.New()
+	if err != nil {
+		logrus.Fatalf("failed to create repository: %s", err)
 	}
 
 	customerRepository := repo.New(backend, backend)
