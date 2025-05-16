@@ -49,19 +49,19 @@ type MultiCustomerQueryRunner interface {
 	PerformCustomerQueries(ctx context.Context, queries []*customerv1.CustomerQuery, p *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error)
 }
 
-type repo struct {
+type Repository struct {
 	CustomerBackend
 	PatientBackend
 }
 
-func New(backend CustomerBackend, p PatientBackend) CustomerRepository {
-	return &repo{
+func New(backend CustomerBackend, p PatientBackend) *Repository {
+	return &Repository{
 		CustomerBackend: backend,
 		PatientBackend:  p,
 	}
 }
 
-func (r *repo) PerformCustomerQueries(ctx context.Context, queries []*customerv1.CustomerQuery, p *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error) {
+func (r *Repository) PerformCustomerQueries(ctx context.Context, queries []*customerv1.CustomerQuery, p *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error) {
 	if cap, ok := r.CustomerBackend.(MultiCustomerQueryRunner); ok {
 		return cap.PerformCustomerQueries(ctx, queries, p)
 	}
@@ -96,7 +96,7 @@ func (r *repo) PerformCustomerQueries(ctx context.Context, queries []*customerv1
 	return cleanedResult, len(cleanedResult), nil
 }
 
-func (r *repo) PerformCustomerQuery(ctx context.Context, query *customerv1.CustomerQuery, p *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error) {
+func (r *Repository) PerformCustomerQuery(ctx context.Context, query *customerv1.CustomerQuery, p *commonv1.Pagination) ([]*customerv1.CustomerResponse, int, error) {
 	if cap, ok := r.CustomerBackend.(SingleCustomerQueryRunnger); ok {
 		return cap.PerformCustomerQuery(ctx, query, p)
 	}

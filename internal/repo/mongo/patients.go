@@ -88,6 +88,39 @@ func (r *Repository) QueryPatients(ctx context.Context, query string) ([]*custom
 	return pbResult, merr.ErrorOrNil()
 }
 
+func (r *Repository) LookupPatientsByCustomerId(ctx context.Context, id string) ([]*customerv1.Patient, error) {
+	oid, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid customer id")
+	}
+
+	res, err := r.patients.Find(ctx, bson.M{
+		"customerId": oid,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to search for patients: %w", err)
+	}
+
+	var result []models.Patient
+	if err := res.All(ctx, &result); err != nil {
+		return nil, fmt.Errorf("failed to decode patient records: %w", err)
+	}
+
+	var merr = new(multierror.Error)
+	pbResult := make([]*customerv1.Patient, 0, len(result))
+	for _, p := range result {
+		pb, err := p.ToProto()
+		if err != nil {
+			merr.Errors = append(merr.Errors, err)
+			continue
+		}
+
+		pbResult = append(pbResult, pb)
+	}
+
+	return pbResult, merr.ErrorOrNil()
+}
+
 func (r *Repository) LookupPatientById(ctx context.Context, id string) (*customerv1.Patient, error) {
 	oid, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
@@ -95,6 +128,20 @@ func (r *Repository) LookupPatientById(ctx context.Context, id string) (*custome
 	}
 
 	res := r.patients.FindOne(ctx, bson.M{"_id": oid})
+	if res.Err() != nil {
+		return nil, convertErr(res.Err())
+	}
+
+	var m models.Patient
+	if err := res.Decode(&m); err != nil {
+		return nil, err
+	}
+
+	return m.ToProto()
+}
+
+func (r *Repository) LookupPatientByAdditionalUniqueId(ctx context.Context, id string) (*customerv1.Patient, error) {
+	res := r.patients.FindOne(ctx, bson.M{"additionalUniqueId": id})
 	if res.Err() != nil {
 		return nil, convertErr(res.Err())
 	}

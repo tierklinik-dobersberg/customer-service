@@ -24,6 +24,7 @@ import (
 	"github.com/tierklinik-dobersberg/customer-service/internal/repo/mongo"
 	"github.com/tierklinik-dobersberg/customer-service/internal/services/customerservice"
 	"github.com/tierklinik-dobersberg/customer-service/internal/services/importservice"
+	"github.com/tierklinik-dobersberg/customer-service/internal/services/patient"
 	"google.golang.org/protobuf/reflect/protoregistry"
 )
 
@@ -102,7 +103,7 @@ func main() {
 		logrus.Fatalf("failed to create repository: %s", err)
 	}
 
-	customerRepository := repo.New(backend, backend)
+	repository := repo.New(backend, backend)
 
 	resolver := resolver{
 		"user":    2,
@@ -110,23 +111,20 @@ func main() {
 		"carddav": 0,
 	}
 
-	// TODO(ppacher): FIXME and implement PatientBackend in inmem as well.
-	var patientRepository repo.PatientBackend
-	if p, ok := customerRepository.(repo.PatientBackend); ok {
-		patientRepository = p
-	}
-
 	// create a new CallService and add it to the mux.
-	importService := importservice.NewImportService(cfg, customerRepository, patientRepository, resolver)
-	customerService := customerservice.New(cfg, customerRepository, resolver)
+	importService := importservice.NewImportService(cfg, repository, repository, resolver)
+	customerService := customerservice.New(cfg, repository, resolver)
+	patientService := patient.New(cfg, repository)
 
 	path, handler := customerv1connect.NewCustomerImportServiceHandler(importService, connect.WithInterceptors(interceptors...))
 	serveMux.Handle(path, handler)
 
 	path, handler = customerv1connect.NewCustomerServiceHandler(customerService, connect.WithInterceptors(interceptors...))
 	serveMux.Handle(path, handler)
-
 	serveMux.Handle("/crm/lookup", http.HandlerFunc(customerService.CRMLookupHandler))
+
+	path, handler = customerv1connect.NewPatientServiceHandler(patientService, connect.WithInterceptors(interceptors...))
+	serveMux.Handle(path, handler)
 
 	loggingHandler := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
