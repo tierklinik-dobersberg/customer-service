@@ -1,8 +1,8 @@
 module github.com/tierklinik-dobersberg/customer-service
 
-go 1.23.0
+go 1.23.8
 
-toolchain go1.23.4
+toolchain go1.23.8
 
 require (
 	github.com/bufbuild/connect-go v1.10.0
