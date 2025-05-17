@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/hashicorp/go-multierror"
@@ -36,13 +37,12 @@ func AddressFromProto(apb *customerv1.Address) Address {
 }
 
 type Customer struct {
-	ID              primitive.ObjectID `bson:"_id"`
-	FirstName       string             `bson:"firstName"`
-	LastName        string             `bson:"lastName"`
-	Addresses       []Address          `bson:"addresses"`
-	PhoneNumbers    []string           `bson:"phoneNumbers"`
-	EmailAddresses  []string           `bson:"emailAddresses"`
-	RecordCreatedAt time.Time          `bson:"recordCreatedAt"`
+	FirstName       string    `bson:"firstName"`
+	LastName        string    `bson:"lastName"`
+	Addresses       []Address `bson:"addresses"`
+	PhoneNumbers    []string  `bson:"phoneNumbers"`
+	EmailAddresses  []string  `bson:"emailAddresses"`
+	RecordCreatedAt time.Time `bson:"recordCreatedAt"`
 }
 
 func CustomerFromProto(cpb *customerv1.Customer) (Customer, error) {
@@ -62,21 +62,11 @@ func CustomerFromProto(cpb *customerv1.Customer) (Customer, error) {
 		c.RecordCreatedAt = cpb.RecordCreatedAt.AsTime()
 	}
 
-	if cpb.Id != "" {
-		oid, err := primitive.ObjectIDFromHex(cpb.Id)
-		if err != nil {
-			return c, nil
-		}
-
-		c.ID = oid
-	}
-
 	return c, nil
 }
 
 func (c Customer) ToProto() *customerv1.Customer {
 	cpb := &customerv1.Customer{
-		Id:              c.ID.Hex(),
 		FirstName:       c.FirstName,
 		LastName:        c.LastName,
 		PhoneNumbers:    c.PhoneNumbers,
@@ -230,12 +220,22 @@ func (s ImportState) ToProto() (*customerv1.ImportState, error) {
 }
 
 type CustomerAndState struct {
-	Customer Customer      `bson:"customer"`
-	States   []ImportState `bson:"states"`
+	ID       primitive.ObjectID `bson:"_id"`
+	Customer Customer           `bson:"customer"`
+	States   []ImportState      `bson:"states"`
 }
 
 func CustomerAndStateFromProto(cspb *customerv1.CustomerResponse) (CustomerAndState, error) {
 	cs := CustomerAndState{}
+
+	if cspb.Customer.Id != "" {
+		oid, err := primitive.ObjectIDFromHex(cspb.Customer.Id)
+		if err != nil {
+			return cs, fmt.Errorf("invalid customer id: %w", err)
+		}
+
+		cs.ID = oid
+	}
 
 	customer, err := CustomerFromProto(cspb.Customer)
 	if err != nil {
@@ -263,6 +263,8 @@ func (cs CustomerAndState) ToProto() (*customerv1.CustomerResponse, error) {
 		Customer: cs.Customer.ToProto(),
 		States:   make([]*customerv1.ImportState, 0, len(cs.States)),
 	}
+
+	r.Customer.Id = cs.ID.Hex()
 
 	var merr = new(multierror.Error)
 	for _, state := range cs.States {
