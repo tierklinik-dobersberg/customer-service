@@ -276,7 +276,7 @@ func (r *Repository) AddAnamnesis(ctx context.Context, patientId string, order i
 	}
 
 	opts := options.Replace().SetUpsert(true)
-	_, err = r.anamnesis.ReplaceOne(ctx, bson.M{"order": a.Order}, opts)
+	_, err = r.anamnesis.ReplaceOne(ctx, bson.M{"order": a.Order}, a, opts)
 
 	if err != nil {
 		return fmt.Errorf("failed to persist record: %w", err)
