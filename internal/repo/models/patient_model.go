@@ -115,7 +115,7 @@ type Anamnesis struct {
 	ID        primitive.ObjectID `bson:"_id,omitempty"`
 	Order     int64              `bson:"order"`
 	PatientID primitive.ObjectID `bson:"patientId"`
-	CreatedAt time.Time          `bson:"createdAt"`
+	CreatedAt time.Time          `bson:"createdAt,omitempty"`
 	Text      string             `bson:"text"`
 	Diagnosis string             `bson:"diagnosis"`
 }

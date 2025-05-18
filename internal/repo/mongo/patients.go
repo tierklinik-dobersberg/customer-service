@@ -271,10 +271,6 @@ func (r *Repository) AddAnamnesis(ctx context.Context, patientId string, order i
 		Order:     order,
 	}
 
-	if a.CreatedAt.IsZero() {
-		a.CreatedAt = time.Now()
-	}
-
 	opts := options.Replace().SetUpsert(true)
 	_, err = r.anamnesis.ReplaceOne(ctx, bson.M{"order": a.Order}, a, opts)
 
