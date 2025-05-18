@@ -110,7 +110,7 @@ func (svc *PatientService) AddAnamnesis(ctx context.Context, req *connect.Reques
 		t = req.Msg.GetAnamnesis().Time.AsTime()
 	}
 
-	if err := svc.repository.AddAnamnesis(ctx, patientID, req.Msg.ImportReference, t, req.Msg.Anamnesis.Diagnosis, req.Msg.Anamnesis.Text); err != nil {
+	if err := svc.repository.AddAnamnesis(ctx, patientID, req.Msg.Anamnesis.Order, t, req.Msg.Anamnesis.Diagnosis, req.Msg.Anamnesis.Text); err != nil {
 		return nil, err
 	}
 

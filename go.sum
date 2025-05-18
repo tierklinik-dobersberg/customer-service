@@ -451,6 +451,8 @@ github.com/tierklinik-dobersberg/apis v0.47.4 h1:U1lJd2ou4wPQ5BS9MbfpAYDv2YA4AaJ
 github.com/tierklinik-dobersberg/apis v0.47.4/go.mod h1:gXuKcer0mMcGWw3DN9M05trUk3LenkcUkSO/pUGSqIA=
 github.com/tierklinik-dobersberg/apis v0.47.5 h1:IKxc+BCNADdVXFYQG4RYUaziUOG99NfqJlhRDkTuauk=
 github.com/tierklinik-dobersberg/apis v0.47.5/go.mod h1:gXuKcer0mMcGWw3DN9M05trUk3LenkcUkSO/pUGSqIA=
+github.com/tierklinik-dobersberg/apis v0.47.7 h1:0U7Bgud62Y+dyQFfmRoA4BGVsxbPepftuxOFFwQ2sKQ=
+github.com/tierklinik-dobersberg/apis v0.47.7/go.mod h1:gXuKcer0mMcGWw3DN9M05trUk3LenkcUkSO/pUGSqIA=
 github.com/tierklinik-dobersberg/go-dbf v0.1.0 h1:AiJd9Fr2bCCtavP7XCkDVa1FcywEByWe3yJDG40lzTs=
 github.com/tierklinik-dobersberg/go-dbf v0.1.0/go.mod h1:D8nutiFua4yNMPs0c+efws/L2Vl34yspIzOFSNOtxVg=
 github.com/tierklinik-dobersberg/go-vetinf v0.1.5 h1:Jb/mr1JBpnCK/g3uPN2XFT5Sj/Fyn3BTxVzkkp1xda4=

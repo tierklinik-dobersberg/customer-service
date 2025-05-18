@@ -112,12 +112,12 @@ func PatientFromProto(pb *customerv1.Patient) (Patient, error) {
 }
 
 type Anamnesis struct {
-	ID              primitive.ObjectID `bson:"_id,omitempty"`
-	ImportReference string             `bson:"importReference"`
-	PatientID       primitive.ObjectID `bson:"patientId"`
-	CreatedAt       time.Time          `bson:"createdAt"`
-	Text            string             `bson:"text"`
-	Diagnosis       string             `bson:"diagnosis"`
+	ID        primitive.ObjectID `bson:"_id,omitempty"`
+	Order     int64              `bson:"order"`
+	PatientID primitive.ObjectID `bson:"patientId"`
+	CreatedAt time.Time          `bson:"createdAt"`
+	Text      string             `bson:"text"`
+	Diagnosis string             `bson:"diagnosis"`
 }
 
 func (a Anamnesis) ToProto() *customerv1.Anamnesis {
@@ -125,5 +125,6 @@ func (a Anamnesis) ToProto() *customerv1.Anamnesis {
 		Time:      timestamppb.New(a.CreatedAt),
 		Text:      a.Text,
 		Diagnosis: a.Diagnosis,
+		Order:     a.Order,
 	}
 }

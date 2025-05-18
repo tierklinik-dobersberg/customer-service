@@ -16,6 +16,6 @@ type PatientBackend interface {
 	QueryPatients(context.Context, string) ([]*customerv1.Patient, error)
 	LockPatient(ctx context.Context, id string) (func(), error)
 
-	AddAnamnesis(ctx context.Context, patientId, reference string, t time.Time, diagnosis, text string) error
+	AddAnamnesis(ctx context.Context, patientId string, order int64, t time.Time, diagnosis, text string) error
 	GetAnamnesis(ctx context.Context, patientId string, from, to time.Time) ([]*customerv1.Anamnesis, error)
 }

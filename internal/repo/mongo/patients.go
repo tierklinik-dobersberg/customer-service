@@ -235,7 +235,7 @@ func (r *Repository) GetAnamnesis(ctx context.Context, patientId string, from, t
 
 	result, err := r.anamnesis.Find(ctx, filter, options.Find().SetSort(bson.D{
 		{
-			Key:   "createdAt",
+			Key:   "order",
 			Value: 1,
 		},
 	}))
@@ -257,30 +257,26 @@ func (r *Repository) GetAnamnesis(ctx context.Context, patientId string, from, t
 	return pbResult, nil
 }
 
-func (r *Repository) AddAnamnesis(ctx context.Context, patientId, reference string, t time.Time, diagnosis, text string) error {
+func (r *Repository) AddAnamnesis(ctx context.Context, patientId string, order int64, t time.Time, diagnosis, text string) error {
 	pid, err := primitive.ObjectIDFromHex(patientId)
 	if err != nil {
 		return fmt.Errorf("invalid object ID: %w", err)
 	}
 
 	a := models.Anamnesis{
-		PatientID:       pid,
-		Diagnosis:       diagnosis,
-		Text:            text,
-		CreatedAt:       t,
-		ImportReference: reference,
+		PatientID: pid,
+		Diagnosis: diagnosis,
+		Text:      text,
+		CreatedAt: t,
+		Order:     order,
 	}
 
 	if a.CreatedAt.IsZero() {
 		a.CreatedAt = time.Now()
 	}
 
-	if a.ImportReference != "" {
-		opts := options.Replace().SetUpsert(true)
-		_, err = r.anamnesis.ReplaceOne(ctx, bson.M{"importReference": a.ImportReference}, opts)
-	} else {
-		_, err = r.anamnesis.InsertOne(ctx, a)
-	}
+	opts := options.Replace().SetUpsert(true)
+	_, err = r.anamnesis.ReplaceOne(ctx, bson.M{"order": a.Order}, opts)
 
 	if err != nil {
 		return fmt.Errorf("failed to persist record: %w", err)

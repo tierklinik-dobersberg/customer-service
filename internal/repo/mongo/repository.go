@@ -149,7 +149,7 @@ func (repo *Repository) setup(ctx context.Context) error {
 					Value: 1,
 				},
 				{
-					Key:   "createdAt",
+					Key:   "order",
 					Value: 1,
 				},
 			},
