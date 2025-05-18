@@ -75,12 +75,42 @@ func (svc *PatientService) GetPatient(ctx context.Context, req *connect.Request[
 }
 
 func (svc *PatientService) AddAnamnesis(ctx context.Context, req *connect.Request[customerv1.AddAnamnesisRequest]) (*connect.Response[emptypb.Empty], error) {
-	var t time.Time
+	var (
+		t         time.Time
+		patientID string
+	)
+
+	switch v := req.Msg.Reference.(type) {
+	case *customerv1.AddAnamnesisRequest_AdditionUniqueId:
+		p, err := svc.repository.LookupPatientByAdditionalUniqueId(ctx, v.AdditionUniqueId)
+		if err != nil {
+			return nil, fmt.Errorf("failed to find patient by additional_unique_id: %w", err)
+		}
+		patientID = p.PatientId
+
+	case *customerv1.AddAnamnesisRequest_PatientId:
+		p, err := svc.repository.LookupPatientByAdditionalUniqueId(ctx, v.PatientId)
+		if err != nil {
+			return nil, fmt.Errorf("failed to find patient by patient_id: %w", err)
+		}
+		patientID = p.PatientId
+
+	case *customerv1.AddAnamnesisRequest_PatientImportReference:
+		p, err := svc.repository.LookupPatientByRef(ctx, v.PatientImportReference.Importer, v.PatientImportReference.InternalReference)
+		if err != nil {
+			return nil, fmt.Errorf("failed to find patient by patient_import_reference: %w", err)
+		}
+		patientID = p.PatientId
+
+	default:
+		return nil, connect.NewError(connect.CodeUnimplemented, fmt.Errorf("unsupported patient reference type"))
+	}
 
 	if req.Msg.GetAnamnesis().Time.IsValid() {
 		t = req.Msg.GetAnamnesis().Time.AsTime()
 	}
-	if err := svc.repository.AddAnamnesis(ctx, req.Msg.PatientId, req.Msg.ImportReference, t, req.Msg.Anamnesis.Diagnosis, req.Msg.Anamnesis.Text); err != nil {
+
+	if err := svc.repository.AddAnamnesis(ctx, patientID, req.Msg.ImportReference, t, req.Msg.Anamnesis.Diagnosis, req.Msg.Anamnesis.Text); err != nil {
 		return nil, err
 	}
 
