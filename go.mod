@@ -9,6 +9,7 @@ require (
 	github.com/emersion/go-vcard v0.0.0-20241024213814-c9703dde27ff
 	github.com/emersion/go-webdav v0.6.0
 	github.com/hashicorp/go-multierror v1.1.1
+	github.com/mennanov/fmutils v0.3.0
 	github.com/nyaruka/phonenumbers v1.6.1
 	github.com/sethvargo/go-envconfig v1.3.0
 	github.com/sirupsen/logrus v1.9.3
