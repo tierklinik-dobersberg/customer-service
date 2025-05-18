@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
 	"github.com/tierklinik-dobersberg/go-vetinf/vetinf"
 	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // ExportedCustomer is a customer exported from a VetInf
@@ -347,4 +349,119 @@ func (e *Exporter) ExportPatients(ctx context.Context) (<-chan *ExportedPatient,
 	}()
 
 	return patients, total, nil
+}
+
+var dateReg = regexp.MustCompile("^[0-9]{1,2}\\.[0-9]{1,2}\\.[0-9]{2,4}")
+
+func trimPrefix(val, prefix string) string {
+	for strings.HasPrefix(val, prefix) {
+		val = strings.TrimPrefix(val, prefix)
+	}
+
+	return val
+}
+
+func (e *Exporter) ExportAnamnesis(ctx context.Context) (<-chan *customerv1.AddAnamnesisRequest, error) {
+	dataCh, err := e.db.Vetamdat()
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(chan *customerv1.AddAnamnesisRequest, 10)
+
+	go func() {
+		defer close(result)
+
+		cache := make(map[string]*customerv1.Anamnesis)
+
+		for d := range dataCh {
+			clientId := trimPrefix(d.ClientID, "0")
+			animalId := trimPrefix(d.AnimalID, "0")
+			internalReference := fmt.Sprintf("customer:%s animal:%s", clientId, animalId)
+
+			// first, trim any leading and suffix spaces
+			text := strings.TrimSpace(d.Data)
+
+			// skip completely empty lines
+			if len(text) == 0 {
+				continue
+			}
+
+			// check if text starts with a date
+			if date := dateReg.Find(([]byte)(text)); date != nil {
+				formats := []string{
+					"02.01.2006",
+					"02.01.06",
+					"2.1.2006",
+					"2.1.06",
+				}
+
+				var t time.Time
+				for _, f := range formats {
+					t, err = time.ParseInLocation(f, string(date), time.Local)
+					if err == nil {
+						break
+					}
+				}
+
+				existing := cache[internalReference]
+
+				// if we have an existing anamnesis message in cache,
+				// send it now
+				if existing != nil && !t.IsZero() {
+					result <- &customerv1.AddAnamnesisRequest{
+						Reference: &customerv1.AddAnamnesisRequest_PatientImportReference{
+							PatientImportReference: &customerv1.PatientImportReference{
+								Importer:          "vetinf",
+								InternalReference: internalReference,
+							},
+						},
+						Anamnesis: existing,
+					}
+				}
+
+				if !t.IsZero() {
+					var order int64
+
+					if existing != nil {
+						order = existing.Order + 1
+					}
+
+					cache[internalReference] = &customerv1.Anamnesis{
+						Time:  timestamppb.New(t),
+						Text:  string(([]byte)(text)[len(date):]), // strip the date
+						Order: order,
+					}
+				}
+			} else {
+				a, ok := cache[internalReference]
+				if !ok {
+					logrus.Errorf("expected a existing cache entry but found none. client=%s patient=%s idx=%d text=%s", d.ClientID, d.AnimalID, d.Index, d.Data)
+
+					cache[internalReference] = &customerv1.Anamnesis{
+						Time:  nil,
+						Order: 0,
+					}
+
+					a = cache[internalReference]
+				}
+
+				a.Text = a.Text + d.Data // keep all whitespace for now
+			}
+		}
+
+		for internalReference, a := range cache {
+			result <- &customerv1.AddAnamnesisRequest{
+				Reference: &customerv1.AddAnamnesisRequest_PatientImportReference{
+					PatientImportReference: &customerv1.PatientImportReference{
+						Importer:          "vetinf",
+						InternalReference: internalReference,
+					},
+				},
+				Anamnesis: a,
+			}
+		}
+	}()
+
+	return result, nil
 }

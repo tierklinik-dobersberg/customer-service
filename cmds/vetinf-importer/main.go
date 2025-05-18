@@ -3,11 +3,11 @@ package main
 import (
 	"context"
 
+	"github.com/bufbuild/connect-go"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
 	"github.com/tierklinik-dobersberg/apis/pkg/cli"
-	"github.com/tierklinik-dobersberg/apis/pkg/h2utils"
-	"github.com/tierklinik-dobersberg/customer-service/pkg/importer"
 )
 
 var (
@@ -51,19 +51,19 @@ func execute(root *cli.Root, args []string) {
 
 	logrus.Infof("connecting to %s", root.Config().BaseURLS.CustomerService)
 
-	root.HttpClient = h2utils.NewInsecureHttp2Client()
-
-	cli := root.CustomerImport()
-
-	importStream := cli.ImportSession(context.Background())
-
-	session, err := importer.NewManager(context.Background(), "vetinf", importStream)
-	if err != nil {
-		logrus.Fatalf("failed to create import manager: %s", err)
-	}
-	defer session.Stop()
-
 	/*
+		root.HttpClient = h2utils.NewInsecureHttp2Client()
+
+		cli := root.CustomerImport()
+
+		importStream := cli.ImportSession(context.Background())
+
+		session, err := importer.NewManager(context.Background(), "vetinf", importStream)
+		if err != nil {
+			logrus.Fatalf("failed to create import manager: %s", err)
+		}
+		defer session.Stop()
+
 		customerStream, _, err := exporter.ExportCustomers(context.Background())
 		if err != nil {
 			logrus.Errorf("failed to create vetinf exporter: %s", err)
@@ -82,22 +82,36 @@ func execute(root *cli.Root, args []string) {
 				logrus.Errorf("failed to upsert customer: %s", err)
 			}
 		}
-	*/
 
-	patientStream, _, err := exporter.ExportPatients(context.Background())
-	if err != nil {
-		logrus.Errorf("failed to export customers: %s", err)
-		return
-	}
-
-	for patient := range patientStream {
-		if patient.Deleted {
-			logrus.Infof("vetinf: skipping deleted patient %s (%s %s)", patient.InternalReference, patient.PatientName, patient.InternalCustomerRef)
-			continue
+		patientStream, _, err := exporter.ExportPatients(context.Background())
+		if err != nil {
+			logrus.Errorf("failed to export patients: %s", err)
+			return
 		}
 
-		if err := session.UpsertPatient(patient.InternalCustomerRef, patient.Patient); err != nil {
-			logrus.Errorf("failed to upsert patient: %s", err)
+		for patient := range patientStream {
+			if patient.Deleted {
+				logrus.Infof("vetinf: skipping deleted patient %s (%s %s)", patient.InternalReference, patient.PatientName, patient.InternalCustomerRef)
+				continue
+			}
+
+			if err := session.UpsertPatient(patient.InternalCustomerRef, patient.Patient); err != nil {
+				logrus.Errorf("failed to upsert patient: %s", err)
+			}
+		}
+	*/
+
+	stream, err := exporter.ExportAnamnesis(context.TODO())
+	if err != nil {
+		logrus.Errorf("failed to export anamnesis: %s", err)
+	}
+
+	p := root.Patient()
+	for msg := range stream {
+		ref := msg.Reference.(*customerv1.AddAnamnesisRequest_PatientImportReference)
+
+		if _, err := p.AddAnamnesis(context.Background(), connect.NewRequest(msg)); err != nil {
+			logrus.Errorf("failed to persist anamnesis: %s, ref:%s %s", err, ref.PatientImportReference.Importer, ref.PatientImportReference.InternalReference)
 		}
 	}
 }
