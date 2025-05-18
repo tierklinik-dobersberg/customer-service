@@ -445,6 +445,8 @@ github.com/testcontainers/testcontainers-go v0.35.0 h1:uADsZpTKFAtp8SLK+hMwSaa+X
 github.com/testcontainers/testcontainers-go v0.35.0/go.mod h1:oEVBj5zrfJTrgjwONs1SsRbnBtH9OKl+IGl3UMcr2B4=
 github.com/tierklinik-dobersberg/apis v0.47.0 h1:WTP3ZdkDTpcbAApRFnxSgF/0ru1vhJQusCudXawypF8=
 github.com/tierklinik-dobersberg/apis v0.47.0/go.mod h1:gXuKcer0mMcGWw3DN9M05trUk3LenkcUkSO/pUGSqIA=
+github.com/tierklinik-dobersberg/apis v0.47.2 h1:2axWHJEgALyMXxSH2jACJVpF9+kR5Gn2gXl21tjrhw4=
+github.com/tierklinik-dobersberg/apis v0.47.2/go.mod h1:gXuKcer0mMcGWw3DN9M05trUk3LenkcUkSO/pUGSqIA=
 github.com/tierklinik-dobersberg/go-dbf v0.1.0 h1:AiJd9Fr2bCCtavP7XCkDVa1FcywEByWe3yJDG40lzTs=
 github.com/tierklinik-dobersberg/go-dbf v0.1.0/go.mod h1:D8nutiFua4yNMPs0c+efws/L2Vl34yspIzOFSNOtxVg=
 github.com/tierklinik-dobersberg/go-vetinf v0.1.5 h1:Jb/mr1JBpnCK/g3uPN2XFT5Sj/Fyn3BTxVzkkp1xda4=

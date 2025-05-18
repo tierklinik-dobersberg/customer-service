@@ -13,6 +13,7 @@ import (
 type Repository struct {
 	customers *mongo.Collection
 	patients  *mongo.Collection
+	anamnesis *mongo.Collection
 	locks     *mongo.Collection
 }
 
@@ -31,6 +32,7 @@ func New(ctx context.Context, uri, dbName string) (*Repository, error) {
 	repo := &Repository{
 		customers: db.Collection("customers"),
 		patients:  db.Collection("patients"),
+		anamnesis: db.Collection("anamnesis"),
 		locks:     db.Collection("locks"),
 	}
 
@@ -123,6 +125,31 @@ func (repo *Repository) setup(ctx context.Context) error {
 				},
 				{
 					Key:   "internalReference",
+					Value: 1,
+				},
+			},
+		},
+	}); err != nil {
+		return fmt.Errorf("failed to create patient indices: %w", err)
+	}
+
+	if _, err := repo.anamnesis.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				{
+					Key:   "patientId",
+					Value: 1,
+				},
+			},
+		},
+		{
+			Keys: bson.D{
+				{
+					Key:   "patientId",
+					Value: 1,
+				},
+				{
+					Key:   "createdAt",
 					Value: 1,
 				},
 			},

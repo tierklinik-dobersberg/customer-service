@@ -9,11 +9,13 @@ import (
 	"github.com/hashicorp/go-multierror"
 	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
 	"github.com/tierklinik-dobersberg/apis/pkg/ql/bsonql"
+	"github.com/tierklinik-dobersberg/apis/pkg/timeutil"
 	"github.com/tierklinik-dobersberg/customer-service/internal/repo"
 	"github.com/tierklinik-dobersberg/customer-service/internal/repo/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -201,4 +203,88 @@ func (r *Repository) LockPatient(ctx context.Context, id string) (func(), error)
 			})
 		}
 	}, nil
+}
+
+func (r *Repository) GetAnamnesis(ctx context.Context, patientId string, from, to time.Time) ([]*customerv1.Anamnesis, error) {
+	pid, err := primitive.ObjectIDFromHex(patientId)
+	if err != nil {
+		return nil, fmt.Errorf("invalid object ID: %w", err)
+	}
+
+	filter := bson.M{
+		"patientId": pid,
+	}
+
+	switch {
+	case !from.IsZero() && !to.IsZero():
+		filter["createdAt"] = bson.M{
+			"$gte": timeutil.StartOfDay(from),
+			"$lte": timeutil.EndOfDay(to),
+		}
+
+	case !from.IsZero():
+		filter["createdAt"] = bson.M{
+			"$gte": timeutil.StartOfDay(from),
+		}
+
+	case !to.IsZero():
+		filter["createdAt"] = bson.M{
+			"$lte": timeutil.EndOfDay(to),
+		}
+	}
+
+	result, err := r.anamnesis.Find(ctx, filter, options.Find().SetSort(bson.D{
+		{
+			Key:   "createdAt",
+			Value: 1,
+		},
+	}))
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to perform find operation: %w", err)
+	}
+
+	var data []models.Anamnesis
+	if err := result.All(ctx, &data); err != nil {
+		return nil, fmt.Errorf("failed to decode documents: %w", err)
+	}
+
+	pbResult := make([]*customerv1.Anamnesis, 0, len(data))
+	for _, a := range data {
+		pbResult = append(pbResult, a.ToProto())
+	}
+
+	return pbResult, nil
+}
+
+func (r *Repository) AddAnamnesis(ctx context.Context, patientId, reference string, t time.Time, diagnosis, text string) error {
+	pid, err := primitive.ObjectIDFromHex(patientId)
+	if err != nil {
+		return fmt.Errorf("invalid object ID: %w", err)
+	}
+
+	a := models.Anamnesis{
+		PatientID:       pid,
+		Diagnosis:       diagnosis,
+		Text:            text,
+		CreatedAt:       t,
+		ImportReference: reference,
+	}
+
+	if a.CreatedAt.IsZero() {
+		a.CreatedAt = time.Now()
+	}
+
+	if a.ImportReference != "" {
+		opts := options.Replace().SetUpsert(true)
+		_, err = r.anamnesis.ReplaceOne(ctx, bson.M{"importReference": a.ImportReference}, opts)
+	} else {
+		_, err = r.anamnesis.InsertOne(ctx, a)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to persist record: %w", err)
+	}
+
+	return nil
 }

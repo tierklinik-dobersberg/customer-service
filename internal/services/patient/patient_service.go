@@ -3,12 +3,16 @@ package patient
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/bufbuild/connect-go"
+	"github.com/mennanov/fmutils"
 	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
 	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1/customerv1connect"
 	"github.com/tierklinik-dobersberg/customer-service/internal/config"
 	"github.com/tierklinik-dobersberg/customer-service/internal/repo"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 type PatientService struct {
@@ -68,4 +72,65 @@ func (svc *PatientService) GetPatient(ctx context.Context, req *connect.Request[
 	}
 
 	return connect.NewResponse(patient), nil
+}
+
+func (svc *PatientService) AddAnamnesis(ctx context.Context, req *connect.Request[customerv1.AddAnamnesisRequest]) (*connect.Response[emptypb.Empty], error) {
+	var t time.Time
+
+	if req.Msg.GetAnamnesis().Time.IsValid() {
+		t = req.Msg.GetAnamnesis().Time.AsTime()
+	}
+	if err := svc.repository.AddAnamnesis(ctx, req.Msg.PatientId, req.Msg.ImportReference, t, req.Msg.Anamnesis.Diagnosis, req.Msg.Anamnesis.Text); err != nil {
+		return nil, err
+	}
+
+	return connect.NewResponse(&emptypb.Empty{}), nil
+}
+
+func (svc *PatientService) GetAnamnesis(ctx context.Context, req *connect.Request[customerv1.GetAnamnesisRequest]) (*connect.Response[customerv1.GetAnamnesisResponse], error) {
+	var (
+		from time.Time
+		to   time.Time
+	)
+
+	if tr := req.Msg.GetTimeRange(); tr != nil {
+		if t := tr.From; t.IsValid() {
+			from = t.AsTime()
+		}
+
+		if t := tr.To; t.IsValid() {
+			to = t.AsTime()
+		}
+	}
+
+	res, err := svc.repository.GetAnamnesis(ctx, req.Msg.PatientId, from, to)
+	if err != nil {
+		return nil, err
+	}
+
+	var patient *customerv1.Patient
+	if fm := req.Msg.ReadMask; fm != nil && len(fm.Paths) > 0 {
+		for _, p := range fm.Paths {
+			if strings.HasPrefix(p, "patient") {
+				var err error
+				patient, err = svc.repository.LookupPatientById(ctx, req.Msg.PatientId)
+				if err != nil {
+					return nil, fmt.Errorf("failed to load patient: %w", err)
+				}
+
+				break
+			}
+		}
+	}
+
+	response := &customerv1.GetAnamnesisResponse{
+		Anamnesis: res,
+		Patient:   patient,
+	}
+
+	if fm := req.Msg.ReadMask; fm != nil && len(fm.Paths) > 0 {
+		fmutils.Prune(response, fm.Paths)
+	}
+
+	return connect.NewResponse(response), nil
 }
