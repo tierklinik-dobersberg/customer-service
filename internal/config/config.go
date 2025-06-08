@@ -1,28 +1,10 @@
 package config
 
-import (
-	"context"
-	"fmt"
-
-	"github.com/sethvargo/go-envconfig"
-)
+import "github.com/tierklinik-dobersberg/apis/pkg/service"
 
 type Config struct {
-	ListenAddress      string   `env:"LISTEN_ADDRESS, default=:8080"`
-	AdminListenAddress string   `env:"ADMIN_LISTEN_ADDRESS, default=:8081"`
-	IdmURL             string   `env:"IDM_URL, required"`
-	AllowedOrigins     []string `env:"ALLOWED_ORIGINS, default=*"`
-	MongoDBURL         string   `env:"MONGO_URL, required"`
-	MongoDatabaseName  string   `env:"MONGO_DATABASE, default=customer-service"`
-	Country            string   `env:"COUNTRY, default=AT"`
-}
+	service.MongoConfig
+	service.BaseConfig
 
-func LoadConfig(ctx context.Context) (*Config, error) {
-	var cfg Config
-
-	if err := envconfig.Process(ctx, &cfg); err != nil {
-		return nil, fmt.Errorf("failed to parse configuration from environment: %w", err)
-	}
-
-	return &cfg, nil
+	Country string `env:"COUNTRY, default=AT"`
 }

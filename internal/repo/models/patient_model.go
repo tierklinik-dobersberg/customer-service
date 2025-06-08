@@ -29,25 +29,27 @@ type Patient struct {
 	Importer           string             `bson:"importer"`
 	FirstSeen          time.Time          `bson:"firstSeen"`
 	LastUpdated        time.Time          `bson:"lastUpdated"`
+	AssignedSpecies    string             `bson:"assignedSpecies"`
 }
 
 func (p Patient) ToProto() (*customerv1.Patient, error) {
 	pb := &customerv1.Patient{
-		PatientId:         p.PatientId.Hex(),
-		CustomerId:        p.CustomerId.Hex(),
-		PatientName:       p.PatientName,
-		Species:           p.Species,
-		Breed:             p.Breed,
-		Gender:            stringToGender[p.Gender],
-		Comment:           p.Comment,
-		ChipNumber:        p.ChipNumber,
-		Color:             p.Color,
-		AdditionUniqueId:  p.AdditionalUniqueId,
-		InternalReference: p.InternalReference,
-		Importer:          p.Importer,
-		LastUpdated:       timestamppb.New(p.LastUpdated),
-		FirstSeen:         timestamppb.New(p.FirstSeen),
-		IsAlive:           p.IsAlive,
+		PatientId:           p.PatientId.Hex(),
+		CustomerId:          p.CustomerId.Hex(),
+		PatientName:         p.PatientName,
+		Species:             p.Species,
+		Breed:               p.Breed,
+		Gender:              stringToGender[p.Gender],
+		Comment:             p.Comment,
+		ChipNumber:          p.ChipNumber,
+		Color:               p.Color,
+		AdditionUniqueId:    p.AdditionalUniqueId,
+		InternalReference:   p.InternalReference,
+		Importer:            p.Importer,
+		LastUpdated:         timestamppb.New(p.LastUpdated),
+		FirstSeen:           timestamppb.New(p.FirstSeen),
+		IsAlive:             p.IsAlive,
+		AssignedSpeciesName: p.AssignedSpecies,
 	}
 
 	if !p.Birthday.IsZero() {
@@ -81,6 +83,7 @@ func PatientFromProto(pb *customerv1.Patient) (Patient, error) {
 		FirstSeen:          pb.FirstSeen.AsTime(),
 		LastUpdated:        pb.LastUpdated.AsTime(),
 		IsAlive:            pb.IsAlive,
+		AssignedSpecies:    pb.AssignedSpeciesName,
 	}
 
 	if pb.ExtraData != nil {

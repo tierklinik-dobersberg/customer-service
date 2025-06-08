@@ -17,18 +17,7 @@ type Repository struct {
 	locks     *mongo.Collection
 }
 
-func New(ctx context.Context, uri, dbName string) (*Repository, error) {
-	cli, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create mongodb client: %w", err)
-	}
-
-	if err := cli.Ping(ctx, nil); err != nil {
-		return nil, fmt.Errorf("failed to ping mongodb server: %w", err)
-	}
-
-	db := cli.Database(dbName)
-
+func New(ctx context.Context, db *mongo.Database) (*Repository, error) {
 	repo := &Repository{
 		customers: db.Collection("customers"),
 		patients:  db.Collection("patients"),

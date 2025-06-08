@@ -7,25 +7,16 @@ import (
 	"os"
 
 	"github.com/bufbuild/connect-go"
-	"github.com/bufbuild/protovalidate-go"
 	"github.com/sirupsen/logrus"
 	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1/customerv1connect"
-	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/idm/v1/idmv1connect"
-	"github.com/tierklinik-dobersberg/apis/pkg/auth"
-	"github.com/tierklinik-dobersberg/apis/pkg/cors"
-	"github.com/tierklinik-dobersberg/apis/pkg/discovery"
-	"github.com/tierklinik-dobersberg/apis/pkg/discovery/consuldiscover"
 	"github.com/tierklinik-dobersberg/apis/pkg/discovery/wellknown"
-	"github.com/tierklinik-dobersberg/apis/pkg/log"
-	"github.com/tierklinik-dobersberg/apis/pkg/server"
-	"github.com/tierklinik-dobersberg/apis/pkg/validator"
+	"github.com/tierklinik-dobersberg/apis/pkg/service"
 	"github.com/tierklinik-dobersberg/customer-service/internal/config"
 	"github.com/tierklinik-dobersberg/customer-service/internal/repo"
 	"github.com/tierklinik-dobersberg/customer-service/internal/repo/mongo"
 	"github.com/tierklinik-dobersberg/customer-service/internal/services/customerservice"
 	"github.com/tierklinik-dobersberg/customer-service/internal/services/importservice"
 	"github.com/tierklinik-dobersberg/customer-service/internal/services/patient"
-	"google.golang.org/protobuf/reflect/protoregistry"
 )
 
 type resolver map[string]int
@@ -47,58 +38,16 @@ var serverContextKey = struct{ S string }{S: "serverContextKey"}
 func main() {
 	ctx := context.Background()
 
-	cfg, err := config.LoadConfig(ctx)
-	if err != nil {
-		logrus.Fatalf("failed to load config: %s", err)
-	}
-
-	roleServiceClient := idmv1connect.NewRoleServiceClient(http.DefaultClient, cfg.IdmURL)
-
-	protoValidator, err := protovalidate.New()
-	if err != nil {
-		logrus.Fatalf("failed to prepare protovalidator: %s", err)
-	}
-
-	authInterceptor := auth.NewAuthAnnotationInterceptor(
-		protoregistry.GlobalFiles,
-		auth.NewIDMRoleResolver(roleServiceClient),
-		func(ctx context.Context, req connect.AnyRequest) (auth.RemoteUser, error) {
-			serverKey, _ := ctx.Value(serverContextKey).(string)
-
-			if serverKey == "admin" {
-				return auth.RemoteUser{
-					ID:          "service-account",
-					DisplayName: req.Peer().Addr,
-					RoleIDs:     []string{"idm_superuser"}, // FIXME(ppacher): use a dedicated manager role for this
-					Admin:       true,
-				}, nil
-			}
-
-			return auth.RemoteHeaderExtractor(ctx, req)
-		},
+	instance, err := service.Configure(
+		wellknown.CustomerV1ServiceScope,
+		config.Config{},
 	)
-
-	interceptors := []connect.Interceptor{
-		log.NewLoggingInterceptor(),
-		validator.NewInterceptor(protoValidator),
+	if err != nil {
+		slog.Error("failed to configure service instance", "error", err)
+		os.Exit(1)
 	}
 
-	slog.SetLogLoggerLevel(slog.LevelDebug)
-
-	if os.Getenv("DEBUG") == "" {
-		interceptors = append(interceptors, authInterceptor)
-	}
-
-	corsConfig := cors.Config{
-		AllowedOrigins:   cfg.AllowedOrigins,
-		AllowCredentials: true,
-	}
-
-	// Prepare our servemux and add handlers.
-	serveMux := http.NewServeMux()
-
-	backend, err := mongo.New(ctx, cfg.MongoDBURL, cfg.MongoDatabaseName)
-
+	backend, err := mongo.New(ctx, instance.Database)
 	if err != nil {
 		logrus.Fatalf("failed to create repository: %s", err)
 	}
@@ -111,64 +60,27 @@ func main() {
 		"carddav": 0,
 	}
 
+	cfg := &instance.Config
+
 	// create a new CallService and add it to the mux.
-	importService := importservice.NewImportService(cfg, repository, repository, resolver)
+	importService := importservice.NewImportService(cfg, repository, repository, resolver, instance.Catalog)
 	customerService := customerservice.New(cfg, repository, resolver)
 	patientService := patient.New(cfg, repository)
 
-	path, handler := customerv1connect.NewCustomerImportServiceHandler(importService, connect.WithInterceptors(interceptors...))
-	serveMux.Handle(path, handler)
+	options := connect.WithOptions(instance.ConnectOptions()...)
 
-	path, handler = customerv1connect.NewCustomerServiceHandler(customerService, connect.WithInterceptors(interceptors...))
-	serveMux.Handle(path, handler)
-	serveMux.Handle("/crm/lookup", http.HandlerFunc(customerService.CRMLookupHandler))
+	path, handler := customerv1connect.NewCustomerImportServiceHandler(importService, options)
+	instance.Mux.Shared.Handle(path, handler)
 
-	path, handler = customerv1connect.NewPatientServiceHandler(patientService, connect.WithInterceptors(interceptors...))
-	serveMux.Handle(path, handler)
+	path, handler = customerv1connect.NewCustomerServiceHandler(customerService, options)
+	instance.Mux.Shared.Handle(path, handler)
+	instance.Mux.Shared.Handle("/crm/lookup", http.HandlerFunc(customerService.CRMLookupHandler))
 
-	loggingHandler := func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			logrus.Infof("received request: %s %s %s%s", r.Proto, r.Method, r.Host, r.URL.String())
+	path, handler = customerv1connect.NewPatientServiceHandler(patientService, options)
+	instance.Mux.Shared.Handle(path, handler)
 
-			next.ServeHTTP(w, r)
-		})
-	}
-
-	wrapWithKey := func(key string, next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			r = r.WithContext(context.WithValue(r.Context(), serverContextKey, key))
-
-			next.ServeHTTP(w, r)
-		})
-	}
-
-	// Register at service catalog
-	catalog, err := consuldiscover.NewFromEnv()
-	if err != nil {
-		logrus.Fatalf("failed to get service catalog client: %s", err)
-	}
-
-	if err := discovery.Register(ctx, catalog, &discovery.ServiceInstance{
-		Name:    wellknown.CustomerV1ServiceScope,
-		Address: cfg.AdminListenAddress,
-	}); err != nil {
-		logrus.Fatalf("failed to register customer-import-service at service catalog: %s", err)
-	}
-
-	// Create the server
-	srv, err := server.CreateWithOptions(cfg.ListenAddress, wrapWithKey("public", loggingHandler(serveMux)), server.WithCORS(corsConfig))
-	if err != nil {
-		logrus.Fatalf("failed to setup server: %s", err)
-	}
-
-	adminServer, err := server.CreateWithOptions(cfg.AdminListenAddress, wrapWithKey("admin", loggingHandler(serveMux)), server.WithCORS(corsConfig))
-	if err != nil {
-		logrus.Fatalf("failed to setup server: %s", err)
-	}
-
-	logrus.Infof("HTTP/2 server (h2c) prepared successfully, startin to listen ...")
-
-	if err := server.Serve(ctx, srv, adminServer); err != nil {
-		logrus.Fatalf("failed to serve: %s", err)
+	if err := instance.Run(); err != nil {
+		slog.Error("failed to serve", "error", err)
+		os.Exit(1)
 	}
 }

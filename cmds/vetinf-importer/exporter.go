@@ -361,6 +361,14 @@ func trimPrefix(val, prefix string) string {
 	return val
 }
 
+func trimSuffix(val, prefix string) string {
+	for strings.HasSuffix(val, prefix) {
+		val = strings.TrimSuffix(val, prefix)
+	}
+
+	return val
+}
+
 func (e *Exporter) ExportAnamnesis(ctx context.Context) (<-chan *customerv1.AddAnamnesisRequest, error) {
 	dataCh, err := e.db.Vetamdat()
 	if err != nil {
@@ -380,12 +388,7 @@ func (e *Exporter) ExportAnamnesis(ctx context.Context) (<-chan *customerv1.AddA
 			internalReference := fmt.Sprintf("customer:%s animal:%s", clientId, animalId)
 
 			// first, trim any leading and suffix spaces
-			text := strings.TrimSpace(d.Data)
-
-			// skip completely empty lines
-			if len(text) == 0 {
-				continue
-			}
+			text := trimPrefix(trimSuffix(d.Data, " "), " ")
 
 			// check if text starts with a date
 			if date := dateReg.Find(([]byte)(text)); date != nil {
@@ -429,28 +432,49 @@ func (e *Exporter) ExportAnamnesis(ctx context.Context) (<-chan *customerv1.AddA
 
 					cache[internalReference] = &customerv1.Anamnesis{
 						Time:  timestamppb.New(t),
-						Text:  string(([]byte)(text)[len(date):]), // strip the date
+						Text:  strings.TrimSpace(string(([]byte)(text)[len(date):])), // strip the date
 						Order: order,
 					}
+
+					continue
 				}
-			} else {
-				a, ok := cache[internalReference]
-				if !ok {
-					logrus.Errorf("expected a existing cache entry but found none. client=%s patient=%s idx=%d text=%s", d.ClientID, d.AnimalID, d.Index, d.Data)
-
-					cache[internalReference] = &customerv1.Anamnesis{
-						Time:  nil,
-						Order: 0,
-					}
-
-					a = cache[internalReference]
-				}
-
-				a.Text = a.Text + d.Data // keep all whitespace for now
 			}
+
+			a, ok := cache[internalReference]
+			if !ok {
+				logrus.Errorf("expected a existing cache entry but found none. client=%s patient=%s idx=%d text=%s", d.ClientID, d.AnimalID, d.Index, d.Data)
+
+				cache[internalReference] = &customerv1.Anamnesis{
+					Time:  nil,
+					Order: 0,
+				}
+
+				a = cache[internalReference]
+			}
+
+			var spacer string
+
+			if len(a.Text) > 0 {
+				if len(text) == 0 {
+					spacer = "\n"
+				} else {
+					last := string(a.Text[len(a.Text)-1])
+					next := string(text[0])
+
+					if IsLower(last) && IsUpper(next) {
+						spacer = " "
+					}
+				}
+			}
+
+			a.Text = a.Text + spacer + text
 		}
 
 		for internalReference, a := range cache {
+			if a.Text == "" {
+				continue
+			}
+
 			result <- &customerv1.AddAnamnesisRequest{
 				Reference: &customerv1.AddAnamnesisRequest_PatientImportReference{
 					PatientImportReference: &customerv1.PatientImportReference{
@@ -464,4 +488,22 @@ func (e *Exporter) ExportAnamnesis(ctx context.Context) (<-chan *customerv1.AddA
 	}()
 
 	return result, nil
+}
+
+func IsUpper(s string) bool {
+	for _, charNumber := range s {
+		if charNumber > 90 || charNumber < 65 {
+			return false
+		}
+	}
+	return true
+}
+
+func IsLower(s string) bool {
+	for _, charNumber := range s {
+		if charNumber > 122 || charNumber < 97 {
+			return false
+		}
+	}
+	return true
 }

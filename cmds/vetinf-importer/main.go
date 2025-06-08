@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 
-	"github.com/bufbuild/connect-go"
+	connect "github.com/bufbuild/connect-go"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
@@ -107,7 +107,9 @@ func execute(root *cli.Root, args []string) {
 	}
 
 	p := root.Patient()
+	_ = p
 	for msg := range stream {
+		_ = msg
 		ref := msg.Reference.(*customerv1.AddAnamnesisRequest_PatientImportReference)
 
 		if _, err := p.AddAnamnesis(context.Background(), connect.NewRequest(msg)); err != nil {

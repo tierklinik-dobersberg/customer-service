@@ -10,6 +10,10 @@ import (
 
 	"github.com/bufbuild/connect-go"
 	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
+	treatmentv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/treatment/v1"
+	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/treatment/v1/treatmentv1connect"
+	"github.com/tierklinik-dobersberg/apis/pkg/discovery"
+	"github.com/tierklinik-dobersberg/apis/pkg/discovery/wellknown"
 	"github.com/tierklinik-dobersberg/customer-service/internal/repo"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -21,6 +25,7 @@ type ImportSession struct {
 	stream             *ImportStream
 	customerRepository repo.CustomerRepository
 	patientRepository  repo.PatientBackend
+	speciesService     treatmentv1connect.SpeciesServiceClient
 	wg                 sync.WaitGroup
 	importer           string
 	resolver           PriorityResolver
@@ -33,13 +38,19 @@ type ImportSession struct {
 	lookups          atomic.Uint64
 }
 
-func NewImportSession(country string, stream *ImportStream, customerRepo repo.CustomerRepository, patientRepo repo.PatientBackend, resolver PriorityResolver) *ImportSession {
+func NewImportSession(country string, stream *ImportStream, customerRepo repo.CustomerRepository, patientRepo repo.PatientBackend, resolver PriorityResolver, catalog discovery.Discoverer) *ImportSession {
+	speciesService, err := wellknown.SpeciesService.Create(context.Background(), catalog)
+	if err != nil {
+		slog.Error("failed to get species service client", "error", err)
+	}
+
 	return &ImportSession{
 		resolver:           resolver,
 		stream:             stream,
 		country:            country,
 		customerRepository: customerRepo,
 		patientRepository:  patientRepo,
+		speciesService:     speciesService,
 		sendQueue:          make(chan *customerv1.ImportSessionResponse, 100),
 	}
 }
@@ -309,8 +320,26 @@ func (session *ImportSession) handlePatientUpsert(ctx context.Context, correlati
 
 		record.PatientId = existing.PatientId
 		record.FirstSeen = existing.FirstSeen
+		record.AssignedSpeciesName = existing.AssignedSpeciesName
 	} else {
 		record.FirstSeen = timestamppb.Now()
+
+		if session.speciesService != nil {
+			res, err := session.speciesService.DetectSpecies(ctx, connect.NewRequest(&treatmentv1.DetectSpeciesRequest{
+				Values: []string{
+					record.Species,
+					record.Breed,
+				},
+			}))
+
+			if err != nil {
+				slog.Error("failed to detect species", "error", err)
+			}
+
+			if len(res.Msg.Species) > 0 {
+				record.AssignedSpeciesName = res.Msg.Species[0].Name
+			}
+		}
 	}
 
 	record.LastUpdated = timestamppb.Now()
