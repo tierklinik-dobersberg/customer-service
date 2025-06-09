@@ -63,9 +63,9 @@ func main() {
 	cfg := &instance.Config
 
 	// create a new CallService and add it to the mux.
-	importService := importservice.NewImportService(cfg, repository, repository, resolver, instance.Catalog)
+	importService := importservice.NewImportService(cfg, repository, repository, resolver, instance.Clients)
 	customerService := customerservice.New(cfg, repository, resolver)
-	patientService := patient.New(cfg, repository)
+	patientService := patient.New(cfg, repository, instance.Clients)
 
 	options := connect.WithOptions(instance.ConnectOptions()...)
 

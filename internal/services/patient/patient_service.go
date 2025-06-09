@@ -3,6 +3,8 @@ package patient
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -10,6 +12,8 @@ import (
 	"github.com/mennanov/fmutils"
 	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
 	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1/customerv1connect"
+	treatmentv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/treatment/v1"
+	"github.com/tierklinik-dobersberg/apis/pkg/discovery/wellknown"
 	"github.com/tierklinik-dobersberg/customer-service/internal/config"
 	"github.com/tierklinik-dobersberg/customer-service/internal/repo"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -19,13 +23,15 @@ type PatientService struct {
 	customerv1connect.UnimplementedPatientServiceHandler
 
 	cfg        *config.Config
+	clients    wellknown.Clients
 	repository repo.PatientBackend
 }
 
-func New(cfg *config.Config, repo repo.PatientBackend) *PatientService {
+func New(cfg *config.Config, repo repo.PatientBackend, clients wellknown.Clients) *PatientService {
 	return &PatientService{
 		repository: repo,
 		cfg:        cfg,
+		clients:    clients,
 	}
 }
 
@@ -35,8 +41,23 @@ func (svc *PatientService) GetPatientsByCustomer(ctx context.Context, req *conne
 		return nil, err
 	}
 
+	speciesNames := make(map[string]struct{})
+	for _, p := range patients {
+		if p.AssignedSpeciesName != "" {
+			speciesNames[p.AssignedSpeciesName] = struct{}{}
+		}
+	}
+
+	speciesResult, err := svc.clients.SpeciesService.ListSpecies(ctx, connect.NewRequest(&treatmentv1.ListSpeciesRequest{
+		Names: slices.Collect(maps.Keys(speciesNames)),
+	}))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get species data: %w", err)
+	}
+
 	return connect.NewResponse(&customerv1.GetPatientsByCustomerResponse{
 		Patients: patients,
+		Species:  speciesResult.Msg.Species,
 	}), nil
 }
 
@@ -46,8 +67,23 @@ func (svc *PatientService) QueryPatients(ctx context.Context, req *connect.Reque
 		return nil, err
 	}
 
+	speciesNames := make(map[string]struct{})
+	for _, p := range patients {
+		if p.AssignedSpeciesName != "" {
+			speciesNames[p.AssignedSpeciesName] = struct{}{}
+		}
+	}
+
+	speciesResult, err := svc.clients.SpeciesService.ListSpecies(ctx, connect.NewRequest(&treatmentv1.ListSpeciesRequest{
+		Names: slices.Collect(maps.Keys(speciesNames)),
+	}))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get species data: %w", err)
+	}
+
 	return connect.NewResponse(&customerv1.QueryPatientsResponse{
 		Patients: patients,
+		Species:  speciesResult.Msg.Species,
 	}), nil
 }
 
